@@ -4,3 +4,8 @@ opencv-python
 numpy
 pillow
 requests
+opencv-contrib-python>=4.8.0
+numpy>=1.23
+ultralytics>=8.0.0
+torch
+torchvision
