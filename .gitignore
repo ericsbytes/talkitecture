@@ -1,0 +1,91 @@
+# =========================
+# OS junk
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Editor / IDE
+# =========================
+.vscode/
+.idea/
+*.swp
+
+# =========================
+# Logs
+# =========================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Node / frontend
+# =========================
+node_modules/
+dist/
+build/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+# Env files (keep examples instead)
+.env
+.env.*
+!.env.example
+
+# =========================
+# Python / backend
+# =========================
+__pycache__/
+*.py[cod]
+*.pyd
+*.egg-info/
+.eggs/
+.venv/
+venv/
+ENV/
+env/
+
+# Python tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Media / generated assets
+# (adjust these if you DO want to commit sample videos)
+# =========================
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.gif
+*.png
+*.jpg
+*.jpeg
+
+# Keep sample assets if you want (uncomment and use a folder)
+# !shared/sample-data/**
+# !shared/sample-data/**/*.mp4
+
+# Temporary render outputs
+outputs/
+renders/
+tmp/
+temp/
+
+# =========================
+# Docker
+# =========================
+**/docker-data/

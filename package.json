@@ -1,0 +1,12 @@
+{
+  "name": "talkitecture",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personifying historical landmarks, helping you learn about their stories. Built for Hack@Brown 2026.",
+  "scripts": {
+    "setup": "sh scripts/setup.sh",
+    "dev:server": "uvicorn app.main:app --reload --port 8000",
+    "dev:client": "npm run dev --prefix apps/client"
+  },
+  "license": "ISC"
+}
