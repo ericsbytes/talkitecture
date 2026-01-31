@@ -4,9 +4,13 @@
   "private": true,
   "description": "Personifying historical landmarks, helping you learn about their stories. Built for Hack@Brown 2026.",
   "scripts": {
-    "setup": "sh scripts/setup.sh",
-    "dev:server": "uvicorn app.main:app --reload --port 8000",
-    "dev:client": "npm run dev --prefix apps/client"
+    "setup": "bash scripts/setup.sh",
+    "dev:server": "cd apps/server && source .venv/bin/activate && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "dev:client": "cd apps/client && npm start",
+    "dev": "npm run setup && concurrently \"npm run dev:server\" \"npm run dev:client\""
   },
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^7.6.0"
+  }
 }
