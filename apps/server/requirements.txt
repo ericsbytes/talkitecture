@@ -4,6 +4,13 @@ opencv-python
 numpy
 pillow
 requests
+opencv-contrib-python>=4.8.0
+ultralytics>=8.0.0
+torch
+torchvision
+librosa
+soundfile
+sounddevice
 elevenlabs
 pydantic
 python-multipart
