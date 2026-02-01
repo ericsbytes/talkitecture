@@ -272,6 +272,126 @@ def draw_quad(frame: np.ndarray, pts4: np.ndarray, color=(0, 255, 0), thickness:
         cv2.circle(frame, (int(x), int(y)), 4, (0, 255, 255), -1)
         cv2.putText(frame, str(i), (int(x) + 6, int(y) - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
+def order_quad_tl_tr_br_bl(quad: np.ndarray) -> np.ndarray:
+    """
+    Reorders 4 points into TL, TR, BR, BL.
+    quad: (4,2)
+    """
+    pts = quad.astype(np.float32)
+    s = pts.sum(axis=1)          # x+y
+    d = pts[:, 0] - pts[:, 1]    # x-y
+
+    tl = pts[np.argmin(s)]
+    br = pts[np.argmax(s)]
+    tr = pts[np.argmax(d)]
+    bl = pts[np.argmin(d)]
+    return np.array([tl, tr, br, bl], dtype=np.float32)
+
+
+def init_points_in_quad(gray: np.ndarray, quad: np.ndarray, max_pts: int = 250) -> Optional[np.ndarray]:
+    """
+    Detect strong corners INSIDE the quad to track with optical flow.
+    Returns pts: (N,2) float32 or None if not enough points.
+    """
+    h, w = gray.shape[:2]
+    mask = np.zeros((h, w), dtype=np.uint8)
+    poly = quad.astype(np.int32).reshape(-1, 1, 2)
+    cv2.fillConvexPoly(mask, poly, 255)
+
+    pts = cv2.goodFeaturesToTrack(
+        gray,
+        maxCorners=max_pts,
+        qualityLevel=0.01,
+        minDistance=6,
+        blockSize=7,
+        mask=mask,
+        useHarrisDetector=False,
+    )
+    if pts is None or len(pts) < 25:
+        return None
+    return pts.reshape(-1, 2).astype(np.float32)
+
+
+def auto_init_quad_from_corners(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
+    """
+    Auto-select a stable quad on a (likely planar) facade by:
+      1) finding lots of corners
+      2) choosing the densest region (grid cell)
+      3) fitting a min-area rectangle to that region -> quad
+
+    Returns:
+      quad (4,2) float32 in TL,TR,BR,BL order OR None
+    """
+    gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+    H, W = gray.shape[:2]
+
+    # Heuristic: ignore top 20% of image (often sky)
+    y0 = int(0.20 * H)
+    mask = np.zeros_like(gray, dtype=np.uint8)
+    mask[y0:, :] = 255
+
+    pts = cv2.goodFeaturesToTrack(
+        gray,
+        maxCorners=1200,
+        qualityLevel=0.01,
+        minDistance=6,
+        blockSize=7,
+        mask=mask,
+    )
+    if pts is None or len(pts) < 80:
+        return None
+
+    pts2 = pts.reshape(-1, 2)
+
+    # Grid-bin corners to find densest region
+    gx, gy = 10, 8  # grid resolution
+    xs = np.clip((pts2[:, 0] / W * gx).astype(int), 0, gx - 1)
+    ys = np.clip((pts2[:, 1] / H * gy).astype(int), 0, gy - 1)
+
+    counts = np.zeros((gy, gx), dtype=np.int32)
+    for xbin, ybin in zip(xs, ys):
+        counts[ybin, xbin] += 1
+
+    yb, xb = np.unravel_index(np.argmax(counts), counts.shape)
+
+    # Take points in the densest cell AND its neighbors for stability
+    keep = []
+    for i in range(len(pts2)):
+        if abs(xs[i] - xb) <= 1 and abs(ys[i] - yb) <= 1:
+            keep.append(i)
+    cluster = pts2[keep]
+
+    if cluster.shape[0] < 40:
+        return None
+
+    # Fit a rotated rectangle
+    rect = cv2.minAreaRect(cluster.astype(np.float32))
+    box = cv2.boxPoints(rect)  # (4,2)
+    quad = order_quad_tl_tr_br_bl(box)
+
+    # Slight shrink-in to avoid grabbing sky/edges (optional)
+    center = quad.mean(axis=0, keepdims=True)
+    quad = center + 0.90 * (quad - center)
+
+    return quad.astype(np.float32)
+
+
+def update_quad_via_homography(quad_ref: np.ndarray, Hmat: np.ndarray) -> np.ndarray:
+    """
+    Uses homography Hmat (ref -> current) to move quad corners into the current frame.
+    """
+    q = quad_ref.reshape(-1, 1, 2).astype(np.float32)
+    q2 = cv2.perspectiveTransform(q, Hmat).reshape(-1, 2)
+    return order_quad_tl_tr_br_bl(q2)
+
+
+def smooth_points(prev: np.ndarray, new: np.ndarray, alpha: float = 0.75) -> np.ndarray:
+    """
+    Exponential smoothing to reduce jitter.
+    alpha close to 1 = smoother but laggier.
+    """
+    return (alpha * prev + (1 - alpha) * new).astype(np.float32)
+
 def warp_face_to_quad(face_rgba: np.ndarray, quad_pts: np.ndarray, out_w: int, out_h: int) -> np.ndarray:
     """
     Warp an RGBA face image (fh, fw, 4) into the video frame using the destination quad points.
@@ -356,18 +476,22 @@ def main(cfg: Config):
     tracking = False
     lost_count = 0
 
-    # --- planar quad tracking state (new mode) ---
+    # --- planar tracking state (homography from many points) ---
     mode = "bbox"  # "bbox" or "quad"
-    quad_pts: Optional[np.ndarray] = None  # (4,2) float32
-    quad_ref: Optional[np.ndarray] = None  # initial reference points (4,2)
     prev_gray: Optional[np.ndarray] = None
-    K: Optional[np.ndarray] = None
-    quad_lost = 0  # count frames with too many lost points
 
-    frame_idx = 0
+    quad_ref: Optional[np.ndarray] = None      # (4,2) initial quad
+    quad_curr: Optional[np.ndarray] = None     # (4,2) current quad
+
+    pts_ref: Optional[np.ndarray] = None       # (N,2) points in reference frame
+    pts_curr: Optional[np.ndarray] = None      # (N,2) points tracked to current frame
+
+    quad_lost = 0
+    frame_idx = 0 
 
     print("Controls:")
     print("  q or ESC: quit")
+    print("  a: auto-init planar quad (no clicking)")
     print("  r: force re-detect with YOLO (drops bbox tracker)")
     print("  m: manually select ROI (bbox tracker)")
     print("  p: planar mode init (click 4 corners on current frame), then track quad thereafter")
@@ -390,30 +514,41 @@ def main(cfg: Config):
         if key == ord("b"):
             mode = "bbox"
         if key == ord("c"):
-            quad_pts = None
-            quad_ref = None
             prev_gray = None
-            K = None
+            quad_ref = None
+            quad_curr = None
+            pts_ref = None
+            pts_curr = None
             quad_lost = 0
+
 
         # Init quad planar tracking on current frame
         if key == ord("p"):
             try:
-                quad_pts = collect_4_points(frame, window="Init Quad (4 clicks)")
-                quad_ref = quad_pts.copy()
-                prev_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                K = approx_camera_matrix(Ww, Hh)
-                mode = "quad"
+                q = collect_4_points(frame, window="Init Quad (4 clicks)")
+                q = order_quad_tl_tr_br_bl(q)
 
-                # Disable bbox tracker when entering quad mode (avoids confusion)
+                gray0 = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                pts0 = init_points_in_quad(gray0, q, max_pts=300)
+                if pts0 is None:
+                    raise RuntimeError("Not enough corners inside quad. Try clicking a more textured facade area.")
+
+                mode = "quad"
+                prev_gray = gray0
+                quad_ref = q.copy()
+                quad_curr = q.copy()
+                pts_ref = pts0.copy()
+                pts_curr = pts0.copy()
+                quad_lost = 0
+
+                # Disable bbox tracker when entering quad mode
                 tracking = False
                 tracker = None
                 tracking_bbox = None
                 lost_count = 0
-                quad_lost = 0
-            except RuntimeError as e:
-                # user cancelled; stay in current mode
+            except RuntimeError:
                 pass
+
 
         # BBox tracker manual init
         if key == ord("m"):
@@ -435,56 +570,142 @@ def main(cfg: Config):
             tracker = None
             tracking_bbox = None
             lost_count = 0
+        if key == ord("a"):
+            # Auto-init quad + points
+            q = auto_init_quad_from_corners(frame)
+            if q is not None:
+                gray0 = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                pts0 = init_points_in_quad(gray0, q, max_pts=300)
+
+                if pts0 is not None:
+                    mode = "quad"
+                    prev_gray = gray0
+                    quad_ref = q.copy()
+                    quad_curr = q.copy()
+                    pts_ref = pts0.copy()
+                    pts_curr = pts0.copy()
+                    quad_lost = 0
+
+                    # Disable bbox pipeline to avoid confusion
+                    tracking = False
+                    tracker = None
+                    tracking_bbox = None
+                    lost_count = 0
 
         # -----------------------------
         # MODE 1: Planar quad tracking
         # -----------------------------
         if mode == "quad":
-            if quad_pts is None or prev_gray is None:
-                cv2.putText(frame, "Quad mode: press 'p' to initialize 4 corners", (20, 40),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (50, 255, 255), 2, cv2.LINE_AA)
+            if prev_gray is None or quad_ref is None or quad_curr is None or pts_ref is None or pts_curr is None:
+                cv2.putText(
+                    frame,
+                    "Quad mode: press 'a' (auto) or 'p' (manual) to init",
+                    (20, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.8,
+                    (50, 255, 255),
+                    2,
+                    cv2.LINE_AA,
+                )
             else:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                next_pts, status = track_points_klt(prev_gray, gray, quad_pts, cfg)
+
+                # Track many points forward
+                next_pts, status = track_points_klt(prev_gray, gray, pts_curr, cfg)
                 good = status.reshape(-1) == 1
 
-                if good.sum() < 4:
+                pts_ref_g = pts_ref[good]
+                next_pts_g = next_pts[good]
+
+                if len(pts_ref_g) < 25:
                     quad_lost += 1
-                    cv2.putText(frame, f"Quad tracking unstable ({quad_lost}). Press 'p' to re-init.", (20, 70),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2, cv2.LINE_AA)
+                    cv2.putText(
+                        frame,
+                        f"Planar tracking weak ({quad_lost}). Press 'a'/'p' to re-init.",
+                        (20, 70),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.8,
+                        (0, 0, 255),
+                        2,
+                        cv2.LINE_AA,
+                    )
+
+                    # Auto-repair: try reseeding points inside current quad
+                    if quad_lost >= 5:
+                        pts_new = init_points_in_quad(gray, quad_curr, max_pts=300)
+                        if pts_new is not None:
+                            # Reset reference to current so homography continues smoothly
+                            prev_gray = gray
+                            quad_ref = quad_curr.copy()
+                            pts_ref = pts_new.copy()
+                            pts_curr = pts_new.copy()
+                            quad_lost = 0
                 else:
-                    quad_pts = next_pts.astype(np.float32)
                     quad_lost = 0
 
-                    draw_quad(frame, quad_pts, color=(0, 255, 0), thickness=2)
-                    # 1) generate face image for this frame
-                    t = time.time()
-                    face_rgba = get_next_face_frame_rgba(t)
+                    # Homography from reference points -> current points
+                    Hmat, inliers = cv2.findHomography(
+                        pts_ref_g.astype(np.float64),
+                        next_pts_g.astype(np.float64),
+                        method=cv2.RANSAC,
+                        ransacReprojThreshold=6.0,
+                    )
 
-                    # 2) warp it onto the tracked quad
-                    warped_face = warp_face_to_quad(face_rgba, quad_pts, Ww, Hh)
+                    if Hmat is None:
+                        cv2.putText(
+                            frame,
+                            "Homography failed. Press 'a'/'p' to re-init.",
+                            (20, 70),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.8,
+                            (0, 0, 255),
+                            2,
+                            cv2.LINE_AA,
+                        )
+                    else:
+                        # Update quad from homography
+                        new_quad = update_quad_via_homography(quad_ref, Hmat)
+                        quad_curr = smooth_points(quad_curr, new_quad, alpha=0.80)
 
-                    # 3) blend onto the live frame
-                    frame = alpha_blend_rgba_onto_bgr(frame, warped_face)
+                        # Draw quad
+                        draw_quad(frame, quad_curr, color=(0, 255, 0), thickness=2)
 
+                        # Project your animated face into quad_curr
+                        t = time.time()
+                        face_rgba = get_next_face_frame_rgba(t)
+                        warped_face = warp_face_to_quad(face_rgba, quad_curr, Ww, Hh)
+                        frame = alpha_blend_rgba_onto_bgr(frame, warped_face)
 
-                    # Homography from reference quad -> current quad
-                    if quad_ref is not None:
-                        Hmat, inliers = cv2.findHomography(quad_ref.astype(np.float64),
-                                                           quad_pts.astype(np.float64),
-                                                           method=cv2.RANSAC,
-                                                           ransacReprojThreshold=6.0)
-                        if Hmat is not None and cfg.use_pose_decomposition and K is not None:
-                            ypr = pose_from_homography(K, Hmat)
-                            if ypr is not None:
-                                yaw, pitch, roll = ypr
-                                cv2.putText(frame, f"plane yaw={yaw:.1f} pitch={pitch:.1f} roll={roll:.1f}",
-                                            (20, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2, cv2.LINE_AA)
+                        # Optional: show inlier count for debugging
+                        if inliers is not None:
+                            cv2.putText(
+                                frame,
+                                f"inliers: {int(inliers.sum())}/{len(pts_ref_g)}",
+                                (20, 110),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.7,
+                                (0, 255, 0),
+                                2,
+                                cv2.LINE_AA,
+                            )
+
+                        # Update point sets to only good points (prevents drift)
+                        pts_ref = pts_ref_g.astype(np.float32)
+                        pts_curr = next_pts_g.astype(np.float32)
 
                 prev_gray = gray
 
-            cv2.putText(frame, "MODE: QUAD (press 'b' for bbox, 'p' to re-init)", (20, 140),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (50, 255, 255), 2, cv2.LINE_AA)
+            cv2.putText(
+                frame,
+                "MODE: QUAD (b=bbox, a=auto-init, p=manual-init, c=clear)",
+                (20, 140),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (50, 255, 255),
+                2,
+                cv2.LINE_AA,
+            )
+
 
         # -----------------------------
         # MODE 2: YOLO + bbox tracking
