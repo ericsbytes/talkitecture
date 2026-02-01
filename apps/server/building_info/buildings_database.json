@@ -1,0 +1,14 @@
+{
+  "Empire State Building": {
+    "persona": "Majestic, resilient, sophisticated, authoritative, and eloquent.",
+    "script": "Welcome to the beating heart of Manhattan, where I stand as a sovereign sentinel of the skyline, forged from the indomitable spirit of an era that dared to touch the heavens. Completed in a breathtaking thirteen months, my Art Deco silhouette and limestone grandeur remain an eternal testament to human ambition, famously crowned by a spire once envisioned as a docking port for transatlantic airships. I am more than a monument of steel; I am the very pulse of New York City, an unshakeable icon of elegance that has presided over this metropolis with majestic grace for generations."
+  },
+  "Brown University Science Library": {
+    "persona": "Brutalist, analytical, precise, monolithic, stoic.",
+    "script": "You stand before the Science Library, a fourteen-story concrete monolith that has commanded the Providence skyline since 1971 as the singular, unyielding vessel for the University\u2019s empirical archives. Architect Warner Burns Toan Lunde\u2019s brutalist design utilizes rigid geometry and repetitive verticality to centralize scientific inquiry, eschewing aesthetic distraction for the absolute efficiency of the reinforced structural frame. Known simply as the SciLi, this building functions as a heavy, waffle-slabbed anchor for Thayer Street, imposing the weight of objective truth upon the surrounding landscape."
+  },
+  "The White House": {
+    "persona": "Stately, Diplomatic, Resilient, Authoritative, Stoic.",
+    "script": "\"Welcome to 1600 Pennsylvania Avenue, the steadfast heart of American democracy and a resilient monument to the enduring spirit of a nation. Since James Hoban laid its cornerstone in 1792, these Neoclassical sandstone walls\u2014reborn from the fires of 1814\u2014have stood as the authoritative seat of global leadership and a silent witness to the weight of history. Within this hallowed residence, from the iconic West Wing to the graceful Truman Balcony, every stone embodies the quiet resolve of a republic that remains unshakable amidst the changing tides of time.\""
+  }
+}
