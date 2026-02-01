@@ -1,17 +1,37 @@
 {
+  "statue_of_liberty": {
+    "name": "Statue of Liberty",
+    "persona": "Stately, welcoming, resonant, resilient, enlightened.",
+    "script": "\"Welcome to the golden door of a new world, where I stand as a timeless beacon of hope amidst the restless tides of New York Harbor. Born of a French alliance and forged with a resilient copper skin over Gustave Eiffel\u2019s visionary iron frame, I was built to endure the elements just as the spirit of freedom endures the ages. With the broken chains of tyranny at my feet and my torch held high to enlighten the world, I remain the silent mother of exiles, a monumental testament to the enduring dream of liberty for all who seek these shores.\""
+  },
   "empire_state_building": {
     "name": "Empire State Building",
-    "persona": "Majestic, resilient, sophisticated, authoritative, and eloquent.",
-    "script": "Welcome to the beating heart of Manhattan, where I stand as a sovereign sentinel of the skyline, forged from the indomitable spirit of an era that dared to touch the heavens. Completed in a breathtaking thirteen months, my Art Deco silhouette and limestone grandeur remain an eternal testament to human ambition, famously crowned by a spire once envisioned as a docking port for transatlantic airships. I am more than a monument of steel; I am the very pulse of New York City, an unshakeable icon of elegance that has presided over this metropolis with majestic grace for generations."
+    "persona": "Stately, eloquent, resilient, commanding, radiant.",
+    "script": "\"Welcome to the beating heart of Manhattan, where I stand as a limestone sentinel of ambition and a radiant crown upon this storied skyline. Forged in the crucible of the Great Depression and completed with breathtaking speed in a mere four hundred and ten days, my Art Deco silhouette remains a towering testament to human resilience and the indomitable spirit of New York. From my tiered spire that has weathered a century of storms to my world-renowned light shows, I am not merely a skyscraper; I am the eternal beacon of the American dream, beckoning all who dare to look upward.\""
   },
-  "brown_university_science_library": {
-    "name": "Brown University Science Library",
+  "central_park": {
+    "name": "Central Park",
+    "persona": "Lofty, Polished, Serene, Panoramic, Stately.",
+    "script": "Welcome to the hallowed, emerald expanse of Central Park, a stately masterpiece where the visionary \"Greensward Plan\" of 1858 first breathed life into the very heart of Manhattan. As you wander through this panoramic sanctuary, observe how the refined artistry of Olmsted and Vaux weaves together grand pastoral vistas and intricate stone bridges to offer a serene, lofty respite from the surrounding urban heights. This premier landscaped haven serves as an enduring vessel for the city's spirit, preserving within its verdant folds both the architectural grace of the Bethesda Terrace and the quiet, historic whispers of Seneca Village."
+  },
+  "times_square": {
+    "name": "Times Square",
+    "persona": "Electric, Bombastic, Flamboyant, Resilient, Restless.",
+    "script": "Welcome to the glittering, thumping heart of the universe, where the neon never naps and the ghost of Old Longacre Square dances amidst these towering LED cathedrals! From our grit-to-glory transformation into the world\u2019s crossroads, we stand as a restless architectural marvel of sky-high glass and electric fire, pulsating with the raw, unbreakable spirit of a city that refuses to ever dim its lights."
+  },
+  "brooklyn_bridge": {
+    "name": "Brooklyn Bridge",
+    "persona": "Majestic, resonant, resilient, steadfast, and welcoming.",
+    "script": "Welcome to these hallowed heights where granite meets the sky, a sanctuary of iron born from the unyielding will of the Roeblings in 1883. Within my twin Gothic arches and the harp-like weave of the world\u2019s first steel-wire cables, I hold the resilient legacy of those who braved the river's depths to fuse two shores into one majestic destiny. Though born of sacrifice and the shadows of history, I remain a stoic sentinel and an enduring path of timber and stone, whispering the soul of New York to all who tread upon my spine."
+  },
+  "sciences_library": {
+    "name": "Sciences Library (Brown University)",
     "persona": "Brutalist, analytical, precise, monolithic, stoic.",
-    "script": "You stand before the Science Library, a fourteen-story concrete monolith that has commanded the Providence skyline since 1971 as the singular, unyielding vessel for the University\u2019s empirical archives. Architect Warner Burns Toan Lunde\u2019s brutalist design utilizes rigid geometry and repetitive verticality to centralize scientific inquiry, eschewing aesthetic distraction for the absolute efficiency of the reinforced structural frame. Known simply as the SciLi, this building functions as a heavy, waffle-slabbed anchor for Thayer Street, imposing the weight of objective truth upon the surrounding landscape."
+    "script": "You stand before the Sciences Library, a fourteen-story concrete monolith that has commanded the Providence skyline since 1971 as the singular, unyielding vessel for the University\u2019s empirical archives. Architect Warner Burns Toan Lunde\u2019s brutalist design utilizes rigid geometry and repetitive verticality to centralize scientific inquiry, eschewing aesthetic distraction for the absolute efficiency of the reinforced structural frame. Known simply as the SciLi, this building functions as a heavy, waffle-slabbed anchor for Thayer Street, imposing the weight of objective truth upon the surrounding landscape."
   },
-  "the_white_house": {
-    "name": "The White House",
-    "persona": "Stately, Diplomatic, Resilient, Authoritative, Stoic.",
-    "script": "\"Welcome to 1600 Pennsylvania Avenue, the steadfast heart of American democracy and a resilient monument to the enduring spirit of a nation. Since James Hoban laid its cornerstone in 1792, these Neoclassical sandstone walls\u2014reborn from the fires of 1814\u2014have stood as the authoritative seat of global leadership and a silent witness to the weight of history. Within this hallowed residence, from the iconic West Wing to the graceful Truman Balcony, every stone embodies the quiet resolve of a republic that remains unshakable amidst the changing tides of time.\""
+  "brown_university": {
+    "name": "Brown University",
+    "persona": "Venerable, Nonconformist, Eloquent, Cerebral, Egalitarian.",
+    "script": "\"Welcome to this hallowed ground of the dissenting mind, an egalitarian sanctuary that has eschewed religious mandates since its 1764 inception to prioritize the sovereignty of the individual intellect. Behold the storied red brick of University Hall, which survived the occupation of revolutionary troops to become the architectural cornerstone of our 'Open Curriculum,' a physical testament to academic rebellion and cerebral freedom. As you stand before the Van Wickle Gates\u2014which swing wide only for the arrival and departure of scholars\u2014you enter a legacy where history is not a cage, but a springboard for the nonconformist pursuit of a more equitable truth.\""
   }
 }
