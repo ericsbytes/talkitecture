@@ -436,7 +436,7 @@ def alpha_blend_rgba_onto_bgr(frame_bgr: np.ndarray, overlay_rgba: np.ndarray) -
     out = out * (1.0 - alpha) + overlay[:, :, :3] * alpha
     return out.astype(np.uint8)
 
-def shrink_quad(quad: np.ndarray, scale: float = 0.75) -> np.ndarray:
+def shrink_quad(quad: np.ndarray, scale: float = 1.5) -> np.ndarray:
     c = quad.mean(axis=0, keepdims=True)
     return (c + scale * (quad - c)).astype(np.float32)
 
@@ -840,7 +840,7 @@ def main(cfg: Config):
                         # Project your animated face into quad_curr
                         t_anim = time.time() - audio_start_time if audio_start_time is not None else 0.0
                         face_rgba = get_next_face_frame_rgba(t_anim)
-                        quad_face = shrink_quad(quad_curr, scale=0.75)
+                        quad_face = shrink_quad(quad_curr, scale=1.2)
                         warped_face = warp_face_to_quad(face_rgba, quad_face, Ww, Hh)
                         frame = alpha_blend_rgba_onto_bgr(frame, warped_face)
 

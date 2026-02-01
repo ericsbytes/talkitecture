@@ -12,3 +12,5 @@ torchvision
 librosa
 soundfile
 sounddevice
+moviepy
+pytoon

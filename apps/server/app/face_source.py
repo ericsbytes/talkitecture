@@ -65,130 +65,110 @@ def get_audio_for_playback():
         return None, None
     return _AUDIO, _SR
 
-def draw_feminine_eye_rgba(
-    img: np.ndarray,
-    center: tuple[int, int],
-    eye_w: int,
-    eye_h_open: int,
-    blink: float,
-    iris_color_bgra=(120, 170, 200, 255),  # soft blue-gray (B,G,R,A)
-):
+import cv2
+import numpy as np
+
+# Global style setting for boldness
+OUTLINE_BOLD = 5 
+OUTLINE_THIN = 3
+
+def draw_eyelashes(img, cx, cy, eye_w, eye_h, blink, side):
     """
-    Draws a cute, feminine eye that blinks nicely.
-    img is RGBA.
-    blink: 1.0 = fully open, 0.0 = closed
+    Draws 3-4 distinct lashes on the outer corner.
+    side: -1 for left eye, 1 for right eye
     """
+    if blink < 0.3: return  # Don't draw individual lashes when closed
+    
+    AA = cv2.LINE_AA
+    # The 'start' point for lashes is the outer upper edge of the eye
+    # We draw 3 lashes with varying angles
+    for i in range(3):
+        angle_deg = -20 - (i * 20)  # Angles fanning upward
+        angle_rad = np.deg2rad(angle_deg)
+        
+        # Start point (on the eyelid curve)
+        start_x = cx + (side * eye_w * 0.8)
+        start_y = cy - (eye_h * 0.6)
+        
+        # End point (fanning out and up)
+        length = 15 + (i * 5)
+        end_x = int(start_x + (side * length * np.cos(angle_rad)))
+        end_y = int(start_y + (length * np.sin(angle_rad)))
+        
+        cv2.line(img, (int(start_x), int(start_y)), (end_x, end_y), (10, 10, 10, 255), 3, AA)
+
+def draw_styled_eye(img, center, eye_w, eye_h_open, blink, iris_color):
     cx, cy = center
+    eye_h = int(eye_h_open * (blink ** 0.8))
+    AA = cv2.LINE_AA
+    
+    # Determine if this is the left or right eye relative to the face center
+    side = -1 if cx < (img.shape[1] // 2) else 1
 
-    # Eye height shrinks with blink; keep >=1 so OpenCV doesn't complain
-    eye_h = max(1, int(eye_h_open * blink))
-
-    # If almost closed: draw a soft eyelid line only (no scary pupil)
     if blink < 0.15:
-        # Slight smile-shaped eyelid
-        cv2.ellipse(img, (cx, cy), (eye_w, max(1, int(0.20 * eye_h_open))), 0, 200, 340, (0, 0, 0, 255), 2)
+        cv2.ellipse(img, (cx, cy), (eye_w, int(eye_h_open*0.25)), 0, 0, 180, (20, 20, 20, 255), 5, AA)
         return
 
-    # --- Sclera (white) ---
-    cv2.ellipse(img, (cx, cy), (eye_w, eye_h), 0, 0, 360, (255, 255, 255, 255), -1)
+    # Sclera & Iris (Your existing logic)
+    cv2.ellipse(img, (cx, cy), (eye_w, eye_h), 0, 0, 360, (255, 255, 255, 255), -1, AA)
+    cv2.ellipse(img, (cx, cy), (eye_w, eye_h), 0, 0, 360, (10, 10, 10, 255), 5, AA)
+    
+    iris_r = int(eye_h * 0.75)
+    cv2.circle(img, (cx, cy), iris_r, iris_color, -1, AA)
+    cv2.circle(img, (cx, cy), int(iris_r * 0.5), (10, 10, 10, 255), -1, AA)
+    cv2.circle(img, (cx - int(iris_r*0.3), cy - int(iris_r*0.3)), int(iris_r*0.3), (255, 255, 255, 255), -1, AA)
 
-    # --- Upper lid outline (makes it less "stare") ---
-    cv2.ellipse(img, (cx, cy), (eye_w, eye_h), 0, 200, 340, (0, 0, 0, 255), 2)
+    # --- ADD EYELASHES HERE ---
+    draw_eyelashes(img, cx, cy, eye_w, eye_h, blink, side)
+    
+    # Bold Upper Eyelid (covers the lash start points for a clean look)
+    cv2.ellipse(img, (cx, cy), (eye_w, eye_h), 0, 190, 350, (10, 10, 10, 255), 7, AA)
 
-    # --- Iris (colored) ---
-    iris_r = max(1, int(0.55 * eye_h))  # scale with openness
-    iris_center = (cx, cy + int(0.05 * eye_h))  # slightly lower = cuter
-    cv2.circle(img, iris_center, iris_r, iris_color_bgra, -1)
+def draw_eyebrow(img, center, width, lift_amt):
+    cx, cy = center
+    lift_y = cy - int(lift_amt * 20)
+    
+    # Using a polyline for a thicker, tapered look
+    pts = np.array([
+        [cx - width, lift_y + 8],
+        [cx, lift_y],
+        [cx + width, lift_y + 8]
+    ], np.int32)
+    cv2.polylines(img, [pts], False, (10, 10, 10, 255), OUTLINE_BOLD + 1, cv2.LINE_AA)
 
-    # --- Pupil (not too big) ---
-    pupil_r = max(1, int(0.45 * iris_r))
-    cv2.circle(img, iris_center, pupil_r, (10, 10, 10, 255), -1)
-
-    # --- Highlight (sparkle) ---
-    hl_r = max(1, int(0.25 * pupil_r))
-    cv2.circle(img, (iris_center[0] - int(0.30 * iris_r), iris_center[1] - int(0.30 * iris_r)), hl_r, (255, 255, 255, 230), -1)
-
-    # --- Lower lash / subtle shadow (softens eye) ---
-    cv2.ellipse(img, (cx, cy + int(0.10 * eye_h)), (eye_w, max(1, int(0.55 * eye_h))), 0, 20, 160, (0, 0, 0, 120), 1)
-
-    # --- Eyelashes (only when open; scale with blink) ---
-    # Anchor along the upper lid arc. As blink closes, lashes shorten and fade out.
-    lash_len = int((0.55 + 0.45 * blink) * (0.75 * eye_h_open))
-    lash_len = max(2, int(0.35 * lash_len))  # keep them tasteful
-    lash_th = 2
-
-    # Place a few lashes on the outer half to feel more feminine
-    # (Angles chosen to fan upward/outward)
-    lashes = [
-        (-0.55, -0.90),
-        (-0.25, -1.00),
-        ( 0.05, -0.95),
-        ( 0.35, -0.80),
-    ]
-    # eyelid y position (top of sclera)
-    lid_y = cy - int(0.65 * eye_h)
-
-    for dx_norm, dy_norm in lashes:
-        x0 = cx + int(dx_norm * eye_w)
-        y0 = lid_y
-        x1 = x0 + int(0.35 * lash_len * dx_norm)
-        y1 = y0 - int(lash_len * (0.9 + 0.2 * (-dy_norm)))  # upward
-        cv2.line(img, (x0, y0), (x1, y1), (0, 0, 0, int(180 * blink)), lash_th)
-
-    # Optional: tiny eyeliner at upper lid
-    cv2.ellipse(img, (cx, cy), (eye_w, eye_h), 0, 200, 340, (0, 0, 0, 200), 2)
-
-def get_next_face_frame_rgba(t: float, w: int = 256, h: int = 256) -> np.ndarray:
+def get_next_face_frame_rgba(t: float, w: int = 512, h: int = 512) -> np.ndarray:
     img = np.zeros((h, w, 4), dtype=np.uint8)
-    cx, cy = w // 2, h // 2
+    mid_x, mid_y = w // 2, h // 2
+    
+    # Function to get openness (Ensure this is defined in your environment)
+    open_amt = mouth_openness_at_time(t) 
+    blink = 0.0 if (np.sin(t * 3.5) > 0.97) else 1.0 
+    
+    # --- Features ---
+    # Eyebrows
+    draw_eyebrow(img, (mid_x - 85, mid_y - 100), 50, open_amt)
+    draw_eyebrow(img, (mid_x + 85, mid_y - 100), 50, open_amt)
 
-    # --- Eyes (same as before) ---
-    # --- Eyes (feminine + blink-friendly) ---
-    blink = 0.25 if (np.sin(t * 2.0) > 0.97) else 1.0  # keep your blink logic
+    # Eyes
+    eye_color = (220, 160, 120, 255) # Blue-ish
+    draw_styled_eye(img, (mid_x - 90, mid_y - 35), 55, 35, blink, eye_color)
+    draw_styled_eye(img, (mid_x + 90, mid_y - 35), 55, 35, blink, eye_color)
 
-    cx, cy = w // 2, h // 2
-    ex = int(0.20 * w)
-    ey = int(0.10 * h)
+    # Mouth
+    m_cx, m_cy = mid_x, mid_y + 100
+    mw, mh = 70, int(5 + 65 * open_amt)
 
-    eye_w = int(0.14 * w)
-    eye_h_open = int(0.09 * h)
+    if open_amt > 0.05:
+        # Thick Outer Lip/Border
+        cv2.ellipse(img, (m_cx, m_cy), (mw + 4, mh + 4), 0, 0, 360, (60, 40, 220, 255), -1, cv2.LINE_AA)
+        # Inner Mouth
+        cv2.ellipse(img, (m_cx, m_cy), (mw, mh), 0, 0, 360, (30, 20, 20, 255), -1, cv2.LINE_AA)
+        
+        # Teeth (Simplified bold block)
+        #tw = int(mw * 0.7)
+        #cv2.rectangle(img, (m_cx - tw, m_cy - mh + 2), (m_cx + tw, m_cy - mh + 15), (255, 255, 255, 255), -1, cv2.LINE_AA)
+    else:
+        # Thick expressive smile line
+        cv2.ellipse(img, (m_cx, m_cy - 10), (mw, 20), 0, 10, 170, (60, 40, 220, 255), OUTLINE_BOLD, cv2.LINE_AA)
 
-    left_center = (cx - ex, cy - ey)
-    right_center = (cx + ex, cy - ey)
-
-    draw_feminine_eye_rgba(img, left_center, eye_w, eye_h_open, blink, iris_color_bgra=(140, 180, 210, 255))
-    draw_feminine_eye_rgba(img, right_center, eye_w, eye_h_open, blink, iris_color_bgra=(140, 180, 210, 255))
-
-    # --- Mouth driven by audio ---
-    open_amt = mouth_openness_at_time(t)  # 0..1
-
-    mw = int(0.23 * w)                    # mouth half-width
-    mh = int(0.02 * h + 0.14 * h * open_amt)  # height grows with audio
-    cx, cy = w // 2, h // 2
-    mouth_center = (cx, cy + int(0.20 * h))
-
-    # Mouth cavity (inside)
-    if open_amt > 0.03:
-        cv2.ellipse(img, mouth_center, (mw, mh), 0, 0, 360, (10, 10, 10, 255), -1)
-
-        # Add a little tongue when open
-        tongue_h = int(0.45 * mh)
-        tongue_w = int(0.65 * mw)
-        tongue_center = (mouth_center[0], mouth_center[1] + int(0.25 * mh))
-        cv2.ellipse(img, tongue_center, (tongue_w, tongue_h), 0, 0, 360, (0, 0, 0, 255), -1)
-
-        # Upper teeth hint (a small light strip)
-        teeth_h = max(2, int(0.20 * mh))
-        teeth_top = mouth_center[1] - int(0.55 * mh)
-        cv2.rectangle(img,
-                    (mouth_center[0] - int(0.7 * mw), teeth_top),
-                    (mouth_center[0] + int(0.7 * mw), teeth_top + teeth_h),
-                    (230, 230, 230, 230), -1)
-
-    # Lip outline (draw on top)
-    cv2.ellipse(img, mouth_center, (mw, max(2, mh)), 0, 0, 360, (64, 40, 241, 255), 3)
-
-    # If basically closed, draw a smile line instead
-    if open_amt <= 0.03:
-        cv2.ellipse(img, mouth_center, (mw, max(2, int(0.05*h))), 0, 0, 180, (0,0,0,255), 3)
     return img
