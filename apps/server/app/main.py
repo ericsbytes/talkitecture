@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from typing import List, Optional
 from pydantic import BaseModel
 from fastapi.responses import Response
@@ -6,11 +6,32 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
 import re
+import json
 from vision import analyze_video
-from facts import get_landmark_facts
+import vision
 
 # Import TTS service
 from tts.tts import tts_service, read_generated_text
+
+# Load buildings database
+BUILDINGS_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "building_info", "buildings_database.json")
+
+def get_building_info(building_name: str) -> Optional[dict]:
+    """
+    Read building info from buildings_database.json
+    Returns dict with 'script', 'persona', etc., or None if not found
+    """
+    try:
+        with open(BUILDINGS_DB_PATH, 'r', encoding='utf-8') as f:
+            db = json.load(f)
+        return db.get(building_name)
+    except FileNotFoundError:
+        return None
+    except json.JSONDecodeError:
+        return None
+    except Exception as e:
+        print(f"Error reading buildings database: {e}")
+        return None
 
 app = FastAPI()
 
@@ -92,29 +113,50 @@ async def analyze_ar_frame_endpoint(
 @app.post("/landmark/voice")
 async def generate_landmark_voice(landmark_name: str, voice_id: Optional[str] = None):
     """
-    Generate voice narration for a landmark
+    Generate voice narration for a landmark using script from buildings_database.json
+    If no voice_id provided, creates a custom voice using the persona
     Returns MP3 audio file
     """
     try:
-        # Get facts from facts database and derive narration text
-        facts = get_landmark_facts(landmark_name)
-        # Prefer an explicit 'script' or 'narration' field, fall back to joining 'facts' or using the name
-        narration_text = None
-        if isinstance(facts, dict):
-            narration_text = (
-                facts.get("script") or facts.get("narration") or
-                (" ".join(facts.get("facts", [])) if facts.get("facts") else None) or
-                facts.get("name")
-            )
-
-        if not narration_text:
+        # Get building info from JSON database
+        building_info = get_building_info(landmark_name)
+        
+        if not building_info:
             raise HTTPException(
                 status_code=404,
-                detail=f"Landmark '{landmark_name}' not found"
+                detail=f"Building '{landmark_name}' not found in database"
             )
         
-        # Generate audio using TTS service (use custom voice if provided)
-        audio_data = tts_service.text_to_speech(text=narration_text, voice_id=voice_id or "21m00Tcm4TlvDq8ikWAM")
+        # Use script for narration text
+        narration_text = building_info.get("script")
+        if not narration_text:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No script found for '{landmark_name}'"
+            )
+        
+        # If no voice_id provided, create a custom voice using persona
+        final_voice_id = voice_id
+        if not final_voice_id:
+            persona = building_info.get("persona")
+            if persona:
+                # Parse persona into adjectives
+                adjectives = [p.strip() for p in re.split(r"[,;]", persona) if p.strip()]
+                # Create custom voice with building name and adjectives
+                voice_result = tts_service.create_custom_voice(
+                    name=f"{landmark_name}_voice",
+                    description=persona,
+                    prompt_adjectives=adjectives
+                )
+                if voice_result and "voice_id" in voice_result:
+                    final_voice_id = voice_result["voice_id"]
+        
+        # Use default voice if custom voice creation failed or no persona
+        if not final_voice_id:
+            final_voice_id = "21m00Tcm4TlvDq8ikWAM"
+        
+        # Generate audio using TTS service
+        audio_data = tts_service.text_to_speech(text=narration_text, voice_id=final_voice_id)
         
         if audio_data is None:
             raise HTTPException(
@@ -130,6 +172,8 @@ async def generate_landmark_voice(landmark_name: str, voice_id: Optional[str] = 
             }
         )
     
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -145,20 +189,28 @@ class VoiceCreateRequest(BaseModel):
 async def create_custom_voice(request: VoiceCreateRequest):
     """
     Create a custom voice on ElevenLabs using a prompt built from adjectives.
+    If landmark_name is provided, pulls persona from buildings_database.json
     Returns the created voice metadata on success.
     """
-    # If a landmark_name is provided and no adjectives were supplied, try to pull persona from facts
+    # If a landmark_name is provided and no adjectives were supplied, pull persona from building database
     adjectives = request.adjectives
+    description = request.description
+    
     if not adjectives and request.landmark_name:
-        facts = get_landmark_facts(request.landmark_name)
-        if isinstance(facts, dict):
-            persona = facts.get("persona")
-            # persona may be a comma-separated string of adjectives
+        building_info = get_building_info(request.landmark_name)
+        if building_info:
+            persona = building_info.get("persona")
             if persona and isinstance(persona, str):
-                # split on commas and semicolons
                 adjectives = [p.strip() for p in re.split(r"[,;]", persona) if p.strip()]
+                # Use persona as description if not explicitly provided
+                if not description:
+                    description = persona
 
-    result = tts_service.create_custom_voice(name=request.name, description=request.description or "", prompt_adjectives=adjectives)
+    result = tts_service.create_custom_voice(
+        name=request.name, 
+        description=description or "", 
+        prompt_adjectives=adjectives
+    )
 
     if result is None:
         raise HTTPException(status_code=500, detail="Failed to create custom voice")
