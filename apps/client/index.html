@@ -7,18 +7,36 @@
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         #video { display: none; }
+        #camera { display: none; width: 100%; max-width: 640px; }
         #canvas { border: 1px solid #ccc; }
+        #arCanvas { position: absolute; top: 0; left: 0; pointer-events: none; }
         #upload { margin-bottom: 20px; }
         #facts { margin-top: 20px; }
+        .controls { margin: 10px 0; }
+        button { margin: 5px; padding: 10px 15px; }
+        #arMode { background: #4CAF50; color: white; }
+        #arMode.active { background: #f44336; }
     </style>
 </head>
 <body>
     <h1>Talkitecture</h1>
-    <input type="file" id="upload" accept="video/*">
-    <button id="analyze">Analyze Video</button>
+
+    <div class="controls">
+        <input type="file" id="upload" accept="video/*">
+        <button id="analyze">Analyze Video</button>
+        <button id="arMode" onclick="window.location.href='src/pages/ar.html'">🎥 AR Mode</button>
+    </div>
+
     <div id="facts"></div>
+
+    <!-- Video elements -->
     <video id="video" controls></video>
+    <video id="camera" autoplay playsinline></video>
+
+    <!-- Canvas elements -->
     <canvas id="canvas"></canvas>
+    <canvas id="arCanvas"></canvas>
+
     <script src="src/index.js"></script>
 </body>
 </html>

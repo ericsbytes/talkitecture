@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Mode - Talkitecture</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background: #000;
+            color: white;
+            overflow: hidden;
+        }
+
+        #camera {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: 1;
+        }
+
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        #landmarkInfo {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+            z-index: 3;
+        }
+
+        #landmarkName {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        #landmarkFacts {
+            font-size: 16px;
+            line-height: 1.4;
+        }
+
+        #landmarkFacts div {
+            margin-bottom: 5px;
+        }
+
+        .face-overlay {
+            position: absolute;
+            border: 3px solid #00ff00;
+            border-radius: 50%;
+            background: rgba(0, 255, 0, 0.2);
+        }
+
+        #controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 3;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #apiToggle {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #apiToggle:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        #apiToggle.active {
+            background: rgba(0, 100, 0, 0.8);
+        }
+
+        #backButton {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        #backButton:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        #status {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 3;
+            font-size: 14px;
+        }
+
+        #sensorData {
+            position: fixed;
+            bottom: 80px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 3;
+            font-size: 12px;
+            font-family: monospace;
+        }
+
+        #sensorData div {
+            margin: 2px 0;
+        }
+    </style>
+</head>
+<body>
+    <video id="camera" autoplay playsinline></video>
+    <canvas id="overlay"></canvas>
+
+    <div id="landmarkInfo">
+        <div id="landmarkName">Detecting landmarks...</div>
+        <div id="landmarkFacts"></div>
+    </div>
+
+    <div id="controls">
+        <button id="apiToggle" class="active">
+            <span id="apiIcon">🌐</span>
+            <span id="apiText">API + Local</span>
+        </button>
+        <button id="backButton" onclick="window.location.href='../index.html'">← Back</button>
+    </div>
+
+    <div id="status">Initializing AR mode...</div>
+
+    <div id="sensorData">
+        <div>GPS: --</div>
+        <div>Orientation: --</div>
+        <div>Connection: --</div>
+    </div>
+
+    <div id="debugLog" style="position: fixed; top: 10px; right: 10px; left: 10px; max-height: 30vh; overflow: auto; background: rgba(0,0,0,0.6); color: #9f9; font-size: 12px; padding: 8px; border-radius: 8px; z-index: 4;">
+        <div>Debug log:</div>
+    </div>
+
+    <script src="ar.js?v=2"></script>
+
+    <!-- Server URL Configuration for Mobile Testing -->
+    <script>
+        // Set this to your development machine's IP address for mobile testing
+        // Example: window.SERVER_URL = '10.37.17.111';
+        // Leave undefined for automatic detection (localhost on desktop, your IP on mobile)
+        // Run ./scripts/find-ip.sh to find your IP address
+        // window.SERVER_URL = 'YOUR_MACHINE_IP_HERE';
+    </script>
+</body>
+</html>
