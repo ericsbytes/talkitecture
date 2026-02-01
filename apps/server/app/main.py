@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File, Form, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import json
+from . import vision
 
 app = FastAPI()
 
@@ -69,44 +70,33 @@ async def analyze_ar_frame_endpoint(
     accuracy: float = Form(...),
     alpha: float = Form(...),
     beta: float = Form(...),
-    gamma: float = Form(...)
+    gamma: float = Form(...),
+    use_api: bool = Form(False)
 ):
-    """Dummy endpoint for AR frame analysis - returns sample landmark data"""
-    return {
-        "landmark": {
-            "name": "Live AR Landmark",
-            "facts": [
-                "Real-time landmark detection",
-                f"GPS: {latitude:.4f}, {longitude:.4f}",
-                f"Orientation: α={alpha:.1f}°, β={beta:.1f}°, γ={gamma:.1f}°"
-            ]
-        },
-        "face_region": {
-            "x": 200,
-            "y": 150,
-            "width": 120,
-            "height": 120
-        },
-        "location": {
-            "latitude": latitude,
-            "longitude": longitude,
-            "accuracy": accuracy
-        },
-        "orientation": {
-            "alpha": alpha,
-            "beta": beta,
-            "gamma": gamma
-        }
-    }
+    """Analyze AR frame and return visible landmarks based on GPS and orientation"""
+    # Use vision module for landmark detection
+    result = vision.analyze_ar_frame(
+        None, latitude, longitude, accuracy, alpha, beta, gamma, use_api=use_api)
+    return result
 
 
 @app.websocket("/ar-stream")
 async def ar_websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
+    print("WebSocket connection attempt received")
+    try:
+        await websocket.accept()
+        print("WebSocket connection established!")
+    except Exception as e:
+        print(f"WebSocket accept failed: {e}")
+        return
 
     try:
         while True:
-            data = await websocket.receive_json()
+            try:
+                data = await websocket.receive_json()
+            except Exception as e:
+                print(f"Failed to receive JSON: {e}")
+                break
 
             latitude = data.get('latitude', 0)
             longitude = data.get('longitude', 0)
@@ -115,40 +105,83 @@ async def ar_websocket_endpoint(websocket: WebSocket):
             beta = data.get('beta', 0)
             gamma = data.get('gamma', 0)
 
-            result = {
-                "landmark": {
-                    "name": "Live AR Landmark (WebSocket)",
-                    "facts": [
-                        "Real-time WebSocket streaming enabled",
-                        f"GPS: {latitude:.4f}, {longitude:.4f}",
-                        f"Orientation: α={alpha:.1f}°, β={beta:.1f}°, γ={gamma:.1f}°",
-                        "Frame received via WebSocket"
-                    ]
-                },
-                "face_region": {
-                    "x": 200,
-                    "y": 150,
-                    "width": 120,
-                    "height": 120
-                },
-                "location": {
-                    "latitude": latitude,
-                    "longitude": longitude,
-                    "accuracy": accuracy
-                },
-                "orientation": {
-                    "alpha": alpha,
-                    "beta": beta,
-                    "gamma": gamma
+            print(
+                f"WebSocket received: lat={latitude}, lon={longitude}, alpha={alpha}, beta={beta}, gamma={gamma}")
+
+            # Find visible landmarks based on GPS and orientation
+            use_api = data.get('use_api', False)  # Optional API integration
+            visible_landmarks = vision.find_visible_landmarks(
+                latitude, longitude, alpha, use_api=use_api)
+
+            if visible_landmarks:
+                print(visible_landmarks)
+                # Return the closest visible landmark
+                landmark = visible_landmarks[0]
+                result = {
+                    "landmark": {
+                        "name": landmark['name'],
+                        "facts": landmark['facts']
+                    },
+                    "face_region": {
+                        "x": 200,
+                        "y": 150,
+                        "width": 120,
+                        "height": 120
+                    },
+                    "location": {
+                        "latitude": latitude,
+                        "longitude": longitude,
+                        "accuracy": accuracy
+                    },
+                    "orientation": {
+                        "alpha": alpha,
+                        "beta": beta,
+                        "gamma": gamma
+                    },
+                    "landmark_info": {
+                        "distance": landmark['distance'],
+                        "bearing": landmark['bearing'],
+                        "angle_diff": landmark['angle_diff']
+                    }
                 }
-            }
+            else:
+                # No landmarks visible
+                result = {
+                    "landmark": {
+                        "name": "No landmarks detected",
+                        "facts": [
+                            "Try moving to a different location",
+                            "Point your camera toward nearby attractions",
+                            f"Current position: {latitude:.4f}, {longitude:.4f}"
+                        ]
+                    },
+                    "face_region": {
+                        "x": 200,
+                        "y": 150,
+                        "width": 120,
+                        "height": 120
+                    },
+                    "location": {
+                        "latitude": latitude,
+                        "longitude": longitude,
+                        "accuracy": accuracy
+                    },
+                    "orientation": {
+                        "alpha": alpha,
+                        "beta": beta,
+                        "gamma": gamma
+                    }
+                }
 
             await websocket.send_json(result)
 
     except Exception as e:
         print(f"WebSocket error: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         await websocket.close()
+        print("WebSocket connection closed")
 
 
 if __name__ == "__main__":

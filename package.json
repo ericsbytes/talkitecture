@@ -7,7 +7,10 @@
     "setup": "bash scripts/setup.sh",
     "dev": "npm run dev:server & npm run dev:client",
     "dev:server": "cd apps/server && source .venv/bin/activate && PYTHONPATH=. uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
-    "dev:client": "cd apps/client && npm run dev"
+    "dev:client": "cd apps/client && npm run dev:http",
+    "dev:server:ssl": "cd apps/server && source .venv/bin/activate && PYTHONPATH=. uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --ssl-keyfile ../client/localhost-key.pem --ssl-certfile ../client/localhost.pem",
+    "dev:client:ssl": "cd apps/client && npm run dev:ssl",
+    "dev:ssl": "npm run dev:server:ssl & npm run dev:client:ssl"
   },
   "license": "ISC"
 }

@@ -6,7 +6,7 @@
     "start": "http-server . -p 3000",
     "dev": "npm run dev:ssl",
     "dev:http": "serve . -p 3000",
-    "dev:ssl": "npm run clean-certs && npm run generate-certs && serve . -p 3000 --ssl-cert localhost.pem --ssl-key localhost-key.pem",
+    "dev:ssl": "serve . -p 3000 --ssl-cert localhost.pem --ssl-key localhost-key.pem",
     "clean-certs": "rm -f localhost.pem localhost-key.pem",
     "generate-certs": "openssl req -x509 -newkey rsa:4096 -keyout localhost-key.pem -out localhost.pem -days 365 -nodes -subj '/CN=localhost'",
     "test": "echo \"Error: no test specified\" && exit 1"

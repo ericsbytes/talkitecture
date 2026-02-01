@@ -1,0 +1,88 @@
+{
+	"landmarks": [
+		{
+			"id": "statue_of_liberty",
+			"name": "Statue of Liberty",
+			"latitude": 40.6892,
+			"longitude": -74.0445,
+			"facts": [
+				"Dedicated on October 28, 1886",
+				"Gift from France to celebrate American independence",
+				"Symbol of freedom and democracy",
+				"Stands 305 feet tall from base to torch"
+			]
+		},
+		{
+			"id": "empire_state_building",
+			"name": "Empire State Building",
+			"latitude": 40.7484,
+			"longitude": -73.9857,
+			"facts": [
+				"Completed in 1931",
+				"Was the world's tallest building for 40 years",
+				"Has 102 floors and 73 elevators",
+				"Iconic Art Deco skyscraper"
+			]
+		},
+		{
+			"id": "central_park",
+			"name": "Central Park",
+			"latitude": 40.7829,
+			"longitude": -73.9654,
+			"facts": [
+				"Opened in 1857",
+				"843 acres of urban oasis",
+				"Designed by Frederick Law Olmsted and Calvert Vaux",
+				"Features Bethesda Terrace and Bow Bridge"
+			]
+		},
+		{
+			"id": "times_square",
+			"name": "Times Square",
+			"latitude": 40.7580,
+			"longitude": -73.9855,
+			"facts": [
+				"Known as the 'Crossroads of the World'",
+				"Famous for its bright billboards and lights",
+				"Named after The New York Times building",
+				"Hosts the annual New Year's Eve ball drop"
+			]
+		},
+		{
+			"id": "brooklyn_bridge",
+			"name": "Brooklyn Bridge",
+			"latitude": 40.7061,
+			"longitude": -73.9969,
+			"facts": [
+				"Completed in 1883",
+				"First suspension bridge to use steel cables",
+				"Spans 1,595 feet across the East River",
+				"Designed by John A. Roebling"
+			]
+		},
+		{
+			"id": "brown_university",
+			"name": "Brown University",
+			"latitude": 41.8268,
+			"longitude": -71.4025,
+			"facts": [
+				"Founded in 1764 as the College in the English Colony of Rhode Island and Providence Plantations",
+				"One of the nine colonial colleges chartered before the American Revolution",
+				"Ivy League university located in Providence, Rhode Island",
+				"Known for its Open Curriculum, allowing students to design their own course of study"
+			]
+		},
+		{
+			"id": "sciences_library",
+			"name": "Sciences Library (Brown University)",
+			"latitude": 41.8265,
+			"longitude": -71.4030,
+			"facts": [
+				"Part of Brown University's library system",
+				"Houses collections in biology, chemistry, physics, and environmental science",
+				"Opened in 1971 as the Sciences Library",
+				"Features modern study spaces and research facilities"
+			]
+		}
+	]
+}

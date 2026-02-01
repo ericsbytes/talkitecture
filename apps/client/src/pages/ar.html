@@ -73,6 +73,29 @@
             top: 20px;
             right: 20px;
             z-index: 3;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #apiToggle {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #apiToggle:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        #apiToggle.active {
+            background: rgba(0, 100, 0, 0.8);
         }
 
         #backButton {
@@ -127,6 +150,10 @@
     </div>
 
     <div id="controls">
+        <button id="apiToggle" class="active">
+            <span id="apiIcon">🌐</span>
+            <span id="apiText">API + Local</span>
+        </button>
         <button id="backButton" onclick="window.location.href='../index.html'">← Back</button>
     </div>
 
@@ -138,6 +165,19 @@
         <div>Connection: --</div>
     </div>
 
-    <script src="ar.js"></script>
+    <div id="debugLog" style="position: fixed; top: 10px; right: 10px; left: 10px; max-height: 30vh; overflow: auto; background: rgba(0,0,0,0.6); color: #9f9; font-size: 12px; padding: 8px; border-radius: 8px; z-index: 4;">
+        <div>Debug log:</div>
+    </div>
+
+    <script src="ar.js?v=2"></script>
+
+    <!-- Server URL Configuration for Mobile Testing -->
+    <script>
+        // Set this to your development machine's IP address for mobile testing
+        // Example: window.SERVER_URL = '10.37.17.111';
+        // Leave undefined for automatic detection (localhost on desktop, your IP on mobile)
+        // Run ./scripts/find-ip.sh to find your IP address
+        // window.SERVER_URL = 'YOUR_MACHINE_IP_HERE';
+    </script>
 </body>
 </html>
