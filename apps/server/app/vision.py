@@ -10,6 +10,10 @@ from typing import Optional, Tuple, List
 from ultralytics import YOLO
 import time
 from face_source import get_next_face_frame_rgba
+import json
+from pathlib import Path
+import sounddevice as sd
+from face_source import init_audio, get_audio_for_playback
 
 BBox = Tuple[int, int, int, int]  # (x, y, w, h)
 
@@ -21,6 +25,11 @@ class Config:
     target_label: str = "empire_state"          # MUST match your model's class name
     conf_thresh: float = 0.35
     iou_thresh: float = 0.45
+    reference_json: str = "app/data/reference_points.json"
+    orb_nfeatures: int = 1500
+    orb_ratio_test: float = 0.75
+    orb_min_matches: int = 20
+
 
     # Tracker settings (bbox tracker still available as fallback)
     tracker_type: str = "CSRT"
@@ -32,6 +41,7 @@ class Config:
     # Display
     window_name: str = "Building Tracker"
     draw_label: bool = True
+    show_debug_overlays: bool = False
 
     # 4-point planar tracking
     lk_win_size: Tuple[int, int] = (21, 21)
@@ -227,6 +237,7 @@ def collect_4_points(frame: np.ndarray, window: str = "Init Quad (4 clicks)") ->
             clone = frame.copy()
         if key in (27, ord("q")):  # cancel
             break
+        
 
     cv2.destroyWindow(window)
 
@@ -328,7 +339,7 @@ def auto_init_quad_from_corners(frame_bgr: np.ndarray) -> Optional[np.ndarray]:
     # Heuristic: ignore top 20% of image (often sky)
     y0 = int(0.20 * H)
     mask = np.zeros_like(gray, dtype=np.uint8)
-    mask[y0:, :] = 255
+    mask[int(0.30*H):int(0.90*H), :] = 255
 
     pts = cv2.goodFeaturesToTrack(
         gray,
@@ -425,6 +436,10 @@ def alpha_blend_rgba_onto_bgr(frame_bgr: np.ndarray, overlay_rgba: np.ndarray) -
     out = out * (1.0 - alpha) + overlay[:, :, :3] * alpha
     return out.astype(np.uint8)
 
+def shrink_quad(quad: np.ndarray, scale: float = 0.75) -> np.ndarray:
+    c = quad.mean(axis=0, keepdims=True)
+    return (c + scale * (quad - c)).astype(np.float32)
+
 def pose_from_homography(K: np.ndarray, H: np.ndarray) -> Optional[Tuple[float, float, float]]:
     """
     Decompose homography into candidate rotations/translations.
@@ -458,6 +473,69 @@ def pose_from_homography(K: np.ndarray, H: np.ndarray) -> Optional[Tuple[float, 
     roll = np.degrees(np.arctan2(R[2, 1], R[2, 2]))
     return float(yaw), float(pitch), float(roll)
 
+def load_reference_json(json_path: str) -> tuple[str, np.ndarray]:
+    """
+    Loads {"image_path": "...", "quad": [[x,y],...]}.
+    Returns (image_path, quad_ref_pts (4,2) float32 in TL,TR,BR,BL order).
+    """
+    with open(json_path, "r") as f:
+        data = json.load(f)
+    img_path = data["image_path"]
+    quad = np.array(data["quad"], dtype=np.float32)
+    quad = order_quad_tl_tr_br_bl(quad)
+    return img_path, quad
+
+
+def orb_detect_and_compute(gray: np.ndarray, nfeatures: int = 1500):
+    orb = cv2.ORB_create(nfeatures=nfeatures)
+    kps, des = orb.detectAndCompute(gray, None)
+    return kps, des
+
+
+def estimate_homography_orb(
+    ref_gray: np.ndarray,
+    ref_kps,
+    ref_des: np.ndarray,
+    frame_gray: np.ndarray,
+    nfeatures: int = 1500,
+    ratio: float = 0.75,
+    min_matches: int = 20,
+) -> Optional[np.ndarray]:
+    """
+    Estimates homography H such that: ref -> frame.
+    Returns H (3x3) or None.
+    """
+    # Compute ORB for current frame
+    orb = cv2.ORB_create(nfeatures=nfeatures)
+    kps2, des2 = orb.detectAndCompute(frame_gray, None)
+    if des2 is None or ref_des is None or len(kps2) < 10 or len(ref_kps) < 10:
+        return None
+
+    # Match using Hamming distance
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
+    knn = bf.knnMatch(ref_des, des2, k=2)
+
+    good = []
+    for m, n in knn:
+        if m.distance < ratio * n.distance:
+            good.append(m)
+
+    if len(good) < min_matches:
+        return None
+
+    src_pts = np.float32([ref_kps[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
+    dst_pts = np.float32([kps2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
+
+    H, inliers = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+    if H is None:
+        return None
+
+    # Optional: require enough inliers
+    if inliers is not None and int(inliers.sum()) < min_matches:
+        return None
+
+    return H
+
 
 # ---------------------------
 # Main
@@ -469,6 +547,18 @@ def main(cfg: Config):
         raise FileNotFoundError(f"Could not open video: {cfg.video_path}")
 
     model = YOLO(cfg.model_path)
+
+    # --- reference init assets (ORB on a reference image) ---
+    ref_img_path, ref_quad = load_reference_json(cfg.reference_json)
+    ref_img_path = str(Path(ref_img_path))  # normalize
+
+    ref_bgr = cv2.imread(ref_img_path)
+    if ref_bgr is None:
+        raise FileNotFoundError(f"Could not read reference image: {ref_img_path}")
+
+    ref_gray = cv2.cvtColor(ref_bgr, cv2.COLOR_BGR2GRAY)
+    ref_kps, ref_des = orb_detect_and_compute(ref_gray, nfeatures=cfg.orb_nfeatures)
+
 
     # --- bbox tracking state (your old mode) ---
     tracker = None
@@ -491,6 +581,7 @@ def main(cfg: Config):
 
     print("Controls:")
     print("  q or ESC: quit")
+    print("  t: init quad from reference image (ORB homography)")
     print("  a: auto-init planar quad (no clicking)")
     print("  r: force re-detect with YOLO (drops bbox tracker)")
     print("  m: manually select ROI (bbox tracker)")
@@ -498,6 +589,12 @@ def main(cfg: Config):
     print("  b: switch back to bbox mode (keeps running YOLO+CSRT pipeline)")
     print("  c: clear quad tracking (if in quad mode)")
     print()
+
+    init_audio("app/data/voice.mp3")  # or .wav
+    audio_data, audio_sr = get_audio_for_playback()
+
+    audio_playing = False
+    audio_start_time = None
 
     while True:
         ret, frame = cap.read()
@@ -592,6 +689,75 @@ def main(cfg: Config):
                     tracking_bbox = None
                     lost_count = 0
 
+        if key == ord("t"):
+            # Try to find the reference plane in THIS frame, then init quad tracker
+            frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            Href = estimate_homography_orb(
+                ref_gray=ref_gray,
+                ref_kps=ref_kps,
+                ref_des=ref_des,
+                frame_gray=frame_gray,
+                nfeatures=cfg.orb_nfeatures,
+                ratio=cfg.orb_ratio_test,
+                min_matches=cfg.orb_min_matches,
+            )
+
+            if Href is None:
+                cv2.putText(
+                    frame,
+                    "Reference match failed. Try a clearer frame or press 'a'/'p'.",
+                    (20, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.8,
+                    (0, 0, 255),
+                    2,
+                    cv2.LINE_AA,
+                )
+            else:
+                # Map the reference quad into current frame
+                q = cv2.perspectiveTransform(ref_quad.reshape(-1, 1, 2), Href).reshape(-1, 2)
+                q = order_quad_tl_tr_br_bl(q)
+
+                # Seed KLT points inside that quad
+                pts0 = init_points_in_quad(frame_gray, q, max_pts=300)
+                if pts0 is None:
+                    cv2.putText(
+                        frame,
+                        "Matched ref, but not enough corners inside quad. Try another frame.",
+                        (20, 70),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.8,
+                        (0, 0, 255),
+                        2,
+                        cv2.LINE_AA,
+                    )
+                else:
+                    # Enter quad tracking mode
+                    mode = "quad"
+                    audio_start_time = time.time()
+                    if audio_data is not None and audio_sr is not None:
+                        sd.stop()  # stop any previous playback
+                        sd.play(audio_data, audio_sr, blocking=False)
+                        audio_playing = True
+                    prev_gray = frame_gray
+                    quad_ref = q.copy()
+                    quad_curr = q.copy()
+                    pts_ref = pts0.copy()
+                    pts_curr = pts0.copy()
+                    quad_lost = 0
+
+                    # Disable bbox tracker to avoid confusion
+                    tracking = False
+                    tracker = None
+                    tracking_bbox = None
+                    lost_count = 0
+        if key == ord("s"):
+            sd.stop()
+            audio_playing = False
+            audio_start_time = None
+
+
         # -----------------------------
         # MODE 1: Planar quad tracking
         # -----------------------------
@@ -667,17 +833,19 @@ def main(cfg: Config):
                         new_quad = update_quad_via_homography(quad_ref, Hmat)
                         quad_curr = smooth_points(quad_curr, new_quad, alpha=0.80)
 
-                        # Draw quad
-                        draw_quad(frame, quad_curr, color=(0, 255, 0), thickness=2)
+                        # Draw quad (debug)
+                        if cfg.show_debug_overlays:
+                            draw_quad(frame, quad_curr, color=(0, 255, 0), thickness=2)
 
                         # Project your animated face into quad_curr
-                        t = time.time()
-                        face_rgba = get_next_face_frame_rgba(t)
-                        warped_face = warp_face_to_quad(face_rgba, quad_curr, Ww, Hh)
+                        t_anim = time.time() - audio_start_time if audio_start_time is not None else 0.0
+                        face_rgba = get_next_face_frame_rgba(t_anim)
+                        quad_face = shrink_quad(quad_curr, scale=0.75)
+                        warped_face = warp_face_to_quad(face_rgba, quad_face, Ww, Hh)
                         frame = alpha_blend_rgba_onto_bgr(frame, warped_face)
 
                         # Optional: show inlier count for debugging
-                        if inliers is not None:
+                        if cfg.show_debug_overlays and inliers is not None:
                             cv2.putText(
                                 frame,
                                 f"inliers: {int(inliers.sum())}/{len(pts_ref_g)}",
@@ -692,6 +860,11 @@ def main(cfg: Config):
                         # Update point sets to only good points (prevents drift)
                         pts_ref = pts_ref_g.astype(np.float32)
                         pts_curr = next_pts_g.astype(np.float32)
+                        # after updating pts_curr
+                        if cfg.show_debug_overlays:
+                            for (x, y) in pts_curr.astype(int):
+                                cv2.circle(frame, (x, y), 1, (255, 0, 0), -1)
+
 
                 prev_gray = gray
 

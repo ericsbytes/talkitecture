@@ -9,3 +9,6 @@ numpy>=1.23
 ultralytics>=8.0.0
 torch
 torchvision
+librosa
+soundfile
+sounddevice
