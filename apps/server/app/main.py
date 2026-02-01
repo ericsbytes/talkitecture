@@ -1,37 +1,47 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
-from typing import List, Optional
-from pydantic import BaseModel
+from .tts.tts import TTSService, read_generated_text
+from .landmarks import LANDMARKS
+from . import vision
+from fastapi import FastAPI, HTTPException, Form, WebSocket
+from typing import Optional
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
 import re
 import json
-from vision import analyze_video
-import vision
+from dotenv import load_dotenv
+from pathlib import Path
 
-# Import TTS service
-from tts.tts import tts_service, read_generated_text
+# Load environment variables FIRST before any other imports
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
-# Load buildings database
-BUILDINGS_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "building_info", "buildings_database.json")
+# Force reload the API key after dotenv loads
+os.environ['ELEVENLABS_API_KEY'] = os.getenv('ELEVENLABS_API_KEY', '')
 
-def get_building_info(building_name: str) -> Optional[dict]:
+# NOW import modules that depend on env variables
+
+# Re-initialize TTS service with the loaded API key
+api_key = os.getenv("ELEVENLABS_API_KEY")
+if api_key:
+    api_key = api_key.strip()  # Remove any whitespace
+    print(f"✓ API Key loaded: {api_key[:10]}... (length: {len(api_key)})")
+else:
+    print("WARNING: ELEVENLABS_API_KEY not found in environment!")
+
+tts_service = TTSService(api_key=api_key if api_key else "")
+
+
+def get_landmark_info(landmark_name: str) -> Optional[dict]:
     """
-    Read building info from buildings_database.json
-    Returns dict with 'script', 'persona', etc., or None if not found
+    Get landmark info by name from the already-loaded LANDMARKS
+    Returns dict with 'script', 'persona', 'latitude', 'longitude', etc., or None if not found
     """
-    try:
-        with open(BUILDINGS_DB_PATH, 'r', encoding='utf-8') as f:
-            db = json.load(f)
-        return db.get(building_name)
-    except FileNotFoundError:
-        return None
-    except json.JSONDecodeError:
-        return None
-    except Exception as e:
-        print(f"Error reading buildings database: {e}")
-        return None
+    for landmark in LANDMARKS:
+        if landmark.get('name') == landmark_name:
+            return landmark
+    return None
+
 
 app = FastAPI()
 
@@ -44,126 +54,54 @@ app.add_middleware(
 )
 
 
-@app.post("/analyze-video")
-async def analyze_video_endpoint(file: UploadFile = File(...)):
-    """Analyze video and return landmark analysis"""
-
-    return {
-        "landmark": {
-            "name": "Sample Landmark",
-            "facts": [
-                "This is a sample landmark for testing",
-                "Built in the year 2024",
-                "Located in a test location"
-            ]
-        },
-        "face_region": {
-            "x": 100,
-            "y": 100,
-            "width": 200,
-            "height": 200
-        }
-    }
-
-@app.post("/analyze-ar")
-async def analyze_ar_endpoint(
-    frame: UploadFile = File(...),
-    latitude: float = Form(...),
-    longitude: float = Form(...),
-    yaw: float = Form(...),
-    pitch: float = Form(...),
-    roll: float = Form(...)
-):
-    return {
-        "landmark": {
-            "name": "AR Sample Landmark",
-            "facts": [
-                "Detected via AR mode",
-                "GPS coordinates processed",
-                "Device orientation tracked"
-            ]
-        },
-        "face_region": {
-            "x": 150,
-            "y": 150,
-            "width": 100,
-            "height": 100
-        }
-    }
-
-
-@app.post("/analyze-ar-frame")
-async def analyze_ar_frame_endpoint(
-    frame: UploadFile = File(...),
-    latitude: float = Form(...),
-    longitude: float = Form(...),
-    accuracy: float = Form(...),
-    alpha: float = Form(...),
-    beta: float = Form(...),
-    gamma: float = Form(...),
-    use_api: bool = Form(False)
-):
-    """Analyze AR frame and return visible landmarks based on GPS and orientation"""
-    # Use vision module for landmark detection
-    result = vision.analyze_ar_frame(
-        None, latitude, longitude, accuracy, alpha, beta, gamma, use_api=use_api)
-    return result
-
-
-@app.post("/landmark/voice")
+@app.get("/landmark/voice")
 async def generate_landmark_voice(landmark_name: str, voice_id: Optional[str] = None):
     """
-    Generate voice narration for a landmark using script from buildings_database.json
+    Generate voice narration for a landmark using script from landmarks.json
     If no voice_id provided, creates a custom voice using the persona
     Returns MP3 audio file
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
     try:
-        # Get building info from JSON database
-        building_info = get_building_info(landmark_name)
-        
-        if not building_info:
+        # Debug: Check if API key is available
+        api_key = os.getenv("ELEVENLABS_API_KEY")
+        logger.info(
+            f"API Key in endpoint: {bool(api_key)}, starts with: {api_key[:10] if api_key else 'None'}")
+
+        # Get landmark info from landmarks JSON database
+        landmark_info = get_landmark_info(landmark_name)
+
+        if not landmark_info:
             raise HTTPException(
                 status_code=404,
-                detail=f"Building '{landmark_name}' not found in database"
+                detail=f"Landmark '{landmark_name}' not found in database"
             )
-        
+
         # Use script for narration text
-        narration_text = building_info.get("script")
+        narration_text = landmark_info.get("script")
         if not narration_text:
-            raise HTTPException(
-                status_code=400,
-                detail=f"No script found for '{landmark_name}'"
-            )
-        
-        # If no voice_id provided, create a custom voice using persona
-        final_voice_id = voice_id
-        if not final_voice_id:
-            persona = building_info.get("persona")
-            if persona:
-                # Parse persona into adjectives
-                adjectives = [p.strip() for p in re.split(r"[,;]", persona) if p.strip()]
-                # Create custom voice with building name and adjectives
-                voice_result = tts_service.create_custom_voice(
-                    name=f"{landmark_name}_voice",
-                    description=persona,
-                    prompt_adjectives=adjectives
-                )
-                if voice_result and "voice_id" in voice_result:
-                    final_voice_id = voice_result["voice_id"]
-        
-        # Use default voice if custom voice creation failed or no persona
-        if not final_voice_id:
-            final_voice_id = "21m00Tcm4TlvDq8ikWAM"
-        
+            # Provide a default narration if no script exists
+            narration_text = f"You are viewing {landmark_name}. This is a notable landmark in the area."
+
+        # For now, always use the default voice to avoid custom voice creation issues
+        # Custom voice creation requires a paid ElevenLabs plan
+        final_voice_id = voice_id if voice_id else "21m00Tcm4TlvDq8ikWAM"
+
+        logger.info(
+            f"Calling TTS with text length: {len(narration_text)}, voice_id: {final_voice_id}")
+
         # Generate audio using TTS service
-        audio_data = tts_service.text_to_speech(text=narration_text, voice_id=final_voice_id)
-        
+        audio_data = tts_service.text_to_speech(
+            text=narration_text, voice_id=final_voice_id)
+
         if audio_data is None:
             raise HTTPException(
                 status_code=500,
                 detail="Failed to generate audio narration"
             )
-        
+
         return Response(
             content=audio_data,
             media_type="audio/mpeg",
@@ -171,51 +109,14 @@ async def generate_landmark_voice(landmark_name: str, voice_id: Optional[str] = 
                 "Content-Disposition": f"attachment; filename={landmark_name.replace(' ', '_')}_narration.mp3"
             }
         )
-    
+
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-
-class VoiceCreateRequest(BaseModel):
-    name: str
-    description: Optional[str] = None
-    adjectives: Optional[List[str]] = None
-    landmark_name: Optional[str] = None
-
-
-@app.post("/voice/create")
-async def create_custom_voice(request: VoiceCreateRequest):
-    """
-    Create a custom voice on ElevenLabs using a prompt built from adjectives.
-    If landmark_name is provided, pulls persona from buildings_database.json
-    Returns the created voice metadata on success.
-    """
-    # If a landmark_name is provided and no adjectives were supplied, pull persona from building database
-    adjectives = request.adjectives
-    description = request.description
-    
-    if not adjectives and request.landmark_name:
-        building_info = get_building_info(request.landmark_name)
-        if building_info:
-            persona = building_info.get("persona")
-            if persona and isinstance(persona, str):
-                adjectives = [p.strip() for p in re.split(r"[,;]", persona) if p.strip()]
-                # Use persona as description if not explicitly provided
-                if not description:
-                    description = persona
-
-    result = tts_service.create_custom_voice(
-        name=request.name, 
-        description=description or "", 
-        prompt_adjectives=adjectives
-    )
-
-    if result is None:
-        raise HTTPException(status_code=500, detail="Failed to create custom voice")
-
-    return result
 
 @app.websocket("/ar-stream")
 async def ar_websocket_endpoint(websocket: WebSocket):
@@ -257,7 +158,8 @@ async def ar_websocket_endpoint(websocket: WebSocket):
                 result = {
                     "landmark": {
                         "name": landmark['name'],
-                        "facts": landmark['facts']
+                        "script": landmark.get('script', ''),
+                        "persona": landmark.get('persona', '')
                     },
                     "face_region": {
                         "x": 200,
@@ -286,11 +188,8 @@ async def ar_websocket_endpoint(websocket: WebSocket):
                 result = {
                     "landmark": {
                         "name": "No landmarks detected",
-                        "facts": [
-                            "Try moving to a different location",
-                            "Point your camera toward nearby attractions",
-                            f"Current position: {latitude:.4f}, {longitude:.4f}"
-                        ]
+                        "script": "Try moving to a different location or point your camera toward nearby attractions.",
+                        "persona": ""
                     },
                     "face_region": {
                         "x": 200,

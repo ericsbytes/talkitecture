@@ -7,3 +7,4 @@ requests
 elevenlabs
 pydantic
 python-multipart
+python-dotenv

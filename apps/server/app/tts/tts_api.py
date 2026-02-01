@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from typing import Optional
 import logging
 
-from tts import tts_service, read_generated_text
+from .tts import tts_service, read_generated_text
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -20,13 +20,13 @@ class LandmarkTTSRequest(BaseModel):
     """Request model for reading text file and generating TTS"""
     file_path: str
     voice_id: Optional[str] = "21m00Tcm4TlvDq8ikWAM"  # Rachel voice
-    
+
 
 class TextTTSRequest(BaseModel):
     """Request model for direct text TTS"""
     text: str
     voice_id: Optional[str] = "21m00Tcm4TlvDq8ikWAM"
-    
+
 
 @app.get("/")
 async def root():
@@ -47,13 +47,13 @@ async def root():
 async def get_voices():
     """Get available ElevenLabs voices"""
     voices = tts_service.get_voices()
-    
+
     if voices is None:
         raise HTTPException(
             status_code=500,
             detail="Failed to retrieve voices from ElevenLabs"
         )
-    
+
     return voices
 
 
@@ -66,27 +66,27 @@ async def generate_audio_from_file(request: LandmarkTTSRequest):
     try:
         # Read text from file
         text = read_generated_text(request.file_path)
-        
+
         if text is None:
             raise HTTPException(
                 status_code=400,
                 detail="Failed to read text from file"
             )
-        
+
         logger.info(f"Generating audio for text from file: {text[:50]}...")
-        
+
         # Generate audio
         audio_data = tts_service.text_to_speech(
             text=text,
             voice_id=request.voice_id
         )
-        
+
         if audio_data is None:
             raise HTTPException(
                 status_code=500,
                 detail="Failed to generate audio"
             )
-        
+
         return Response(
             content=audio_data,
             media_type="audio/mpeg",
@@ -94,7 +94,7 @@ async def generate_audio_from_file(request: LandmarkTTSRequest):
                 "Content-Disposition": "attachment; filename=narration.mp3"
             }
         )
-    
+
     except Exception as e:
         logger.error(f"Error generating audio from file: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -109,15 +109,15 @@ async def stream_audio_from_file(request: LandmarkTTSRequest):
     try:
         # Read text from file
         text = read_generated_text(request.file_path)
-        
+
         if text is None:
             raise HTTPException(
                 status_code=400,
                 detail="Failed to read text from file"
             )
-        
+
         logger.info(f"Streaming audio for text from file: {text[:50]}...")
-        
+
         # Stream audio
         return StreamingResponse(
             tts_service.stream_text_to_speech(
@@ -126,7 +126,7 @@ async def stream_audio_from_file(request: LandmarkTTSRequest):
             ),
             media_type="audio/mpeg"
         )
-    
+
     except Exception as e:
         logger.error(f"Error streaming audio from file: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -140,18 +140,18 @@ async def text_to_speech(request: TextTTSRequest):
     """
     try:
         logger.info(f"Generating TTS for: {request.text[:50]}...")
-        
+
         audio_data = tts_service.text_to_speech(
             text=request.text,
             voice_id=request.voice_id
         )
-        
+
         if audio_data is None:
             raise HTTPException(
                 status_code=500,
                 detail="Failed to generate audio"
             )
-        
+
         return Response(
             content=audio_data,
             media_type="audio/mpeg",
@@ -159,7 +159,7 @@ async def text_to_speech(request: TextTTSRequest):
                 "Content-Disposition": "attachment; filename=tts_output.mp3"
             }
         )
-    
+
     except Exception as e:
         logger.error(f"Error in text to speech: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -173,7 +173,7 @@ async def stream_text_to_speech(request: TextTTSRequest):
     """
     try:
         logger.info(f"Streaming TTS for: {request.text[:50]}...")
-        
+
         return StreamingResponse(
             tts_service.stream_text_to_speech(
                 text=request.text,
@@ -181,7 +181,7 @@ async def stream_text_to_speech(request: TextTTSRequest):
             ),
             media_type="audio/mpeg"
         )
-    
+
     except Exception as e:
         logger.error(f"Error streaming TTS: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -3,7 +3,9 @@ const camera = document.getElementById('camera');
 const overlay = document.getElementById('overlay');
 const landmarkInfo = document.getElementById('landmarkInfo');
 const landmarkName = document.getElementById('landmarkName');
-const landmarkFacts = document.getElementById('landmarkFacts');
+const landmarkScript = document.getElementById('landmarkScript');
+const playButton = document.getElementById('playButton');
+const audioStatus = document.getElementById('audioStatus');
 const statusDiv = document.getElementById('status');
 const sensorDataDiv = document.getElementById('sensorData');
 const debugLogDiv = document.getElementById('debugLog');
@@ -21,6 +23,9 @@ let lastFrameTime = 0;
 let sendIntervalId = null;
 let useApi = false; // API integration toggle - start disabled for testing local landmarks
 const FRAME_RATE_LIMIT = 3000 / 10; // 30 FPS
+let currentLandmarkName = null;
+let audioElement = null;
+let isPlayingAudio = false;
 
 function logDebug(message) {
     if (!debugLogDiv) return;
@@ -28,6 +33,79 @@ function logDebug(message) {
     entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
     debugLogDiv.appendChild(entry);
     debugLogDiv.scrollTop = debugLogDiv.scrollHeight;
+}
+
+async function playLandmarkNarration(landmarkName) {
+    if (!landmarkName || isPlayingAudio) return;
+    
+    try {
+        playButton.disabled = true;
+        audioStatus.textContent = 'Fetching audio...';
+        logDebug(`Fetching narration for ${landmarkName}`);
+
+        // Get server URL
+        let serverUrl = window.SERVER_URL || window.location.hostname;
+        if (serverUrl === '127.0.0.1' || serverUrl === '') {
+            serverUrl = 'localhost';
+        }
+
+        const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+        const url = `${protocol}//${serverUrl}:8000/landmark/voice?landmark_name=${encodeURIComponent(landmarkName)}`;
+
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch audio: ${response.status}`);
+        }
+
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+
+        // Create or reuse audio element
+        if (!audioElement) {
+            audioElement = new Audio();
+            audioElement.addEventListener('ended', () => {
+                isPlayingAudio = false;
+                playButton.disabled = false;
+                audioStatus.textContent = 'Finished';
+                playButton.textContent = '🔊 Play Narration';
+            });
+            audioElement.addEventListener('error', (e) => {
+                console.error('Audio playback error:', e);
+                isPlayingAudio = false;
+                playButton.disabled = false;
+                audioStatus.textContent = 'Error playing audio';
+                logDebug('Audio playback error');
+            });
+        }
+
+        audioElement.src = audioUrl;
+        audioElement.play();
+        isPlayingAudio = true;
+        audioStatus.textContent = 'Now playing...';
+        playButton.textContent = '⏸ Stop';
+        logDebug('Narration playing...');
+    } catch (error) {
+        console.error('Error playing narration:', error);
+        audioStatus.textContent = 'Error loading audio';
+        playButton.disabled = false;
+        logDebug(`Error: ${error.message}`);
+    }
+}
+
+function toggleAudioPlayback() {
+    if (!currentLandmarkName) {
+        audioStatus.textContent = 'No landmark selected';
+        return;
+    }
+
+    if (isPlayingAudio && audioElement) {
+        audioElement.pause();
+        isPlayingAudio = false;
+        playButton.textContent = '🔊 Play Narration';
+        audioStatus.textContent = 'Paused';
+    } else {
+        playLandmarkNarration(currentLandmarkName);
+    }
 }
 
 function sendSensorData() {
@@ -376,8 +454,21 @@ function updateAROverlay(result) {
     }
 
     // Update landmark info
-    landmarkName.textContent = result.landmark.name;
-    landmarkFacts.innerHTML = result.landmark.facts.map(fact => `<div>• ${fact}</div>`).join('');
+    const landmarkNameText = result.landmark.name;
+    landmarkName.textContent = landmarkNameText;
+    currentLandmarkName = landmarkNameText;
+    
+    // Display script/narration as caption
+    landmarkScript.textContent = result.landmark.script || '';
+    
+    // Reset audio status when landmark changes
+    if (audioElement) {
+        audioElement.pause();
+    }
+    isPlayingAudio = false;
+    playButton.disabled = false;
+    playButton.textContent = '🔊 Play Narration';
+    audioStatus.textContent = '';
 
     // Show landmark info
     landmarkInfo.style.display = 'block';
@@ -421,6 +512,9 @@ window.addEventListener('load', () => {
 
     // Add API toggle event listener
     document.getElementById('apiToggle').addEventListener('click', toggleApi);
+    
+    // Add audio play button listener
+    playButton.addEventListener('click', toggleAudioPlayback);
 });
 
 // Cleanup when leaving page

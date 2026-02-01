@@ -4,85 +4,57 @@
 			"id": "statue_of_liberty",
 			"name": "Statue of Liberty",
 			"latitude": 40.6892,
-			"longitude": -74.0445,
-			"facts": [
-				"Dedicated on October 28, 1886",
-				"Gift from France to celebrate American independence",
-				"Symbol of freedom and democracy",
-				"Stands 305 feet tall from base to torch"
-			]
+			"longitude": -74.0445
 		},
 		{
 			"id": "empire_state_building",
 			"name": "Empire State Building",
 			"latitude": 40.7484,
 			"longitude": -73.9857,
-			"facts": [
-				"Completed in 1931",
-				"Was the world's tallest building for 40 years",
-				"Has 102 floors and 73 elevators",
-				"Iconic Art Deco skyscraper"
-			]
+			"persona": "Majestic, resilient, sophisticated, authoritative, and eloquent.",
+			"script": "Welcome to the beating heart of Manhattan, where I stand as a sovereign sentinel of the skyline, forged from the indomitable spirit of an era that dared to touch the heavens. Completed in a breathtaking thirteen months, my Art Deco silhouette and limestone grandeur remain an eternal testament to human ambition, famously crowned by a spire once envisioned as a docking port for transatlantic airships. I am more than a monument of steel; I am the very pulse of New York City, an unshakeable icon of elegance that has presided over this metropolis with majestic grace for generations."
 		},
 		{
 			"id": "central_park",
 			"name": "Central Park",
 			"latitude": 40.7829,
-			"longitude": -73.9654,
-			"facts": [
-				"Opened in 1857",
-				"843 acres of urban oasis",
-				"Designed by Frederick Law Olmsted and Calvert Vaux",
-				"Features Bethesda Terrace and Bow Bridge"
-			]
+			"longitude": -73.9654
 		},
 		{
 			"id": "times_square",
 			"name": "Times Square",
 			"latitude": 40.7580,
-			"longitude": -73.9855,
-			"facts": [
-				"Known as the 'Crossroads of the World'",
-				"Famous for its bright billboards and lights",
-				"Named after The New York Times building",
-				"Hosts the annual New Year's Eve ball drop"
-			]
+			"longitude": -73.9855
 		},
 		{
 			"id": "brooklyn_bridge",
 			"name": "Brooklyn Bridge",
 			"latitude": 40.7061,
-			"longitude": -73.9969,
-			"facts": [
-				"Completed in 1883",
-				"First suspension bridge to use steel cables",
-				"Spans 1,595 feet across the East River",
-				"Designed by John A. Roebling"
-			]
+			"longitude": -73.9969
 		},
 		{
 			"id": "brown_university",
 			"name": "Brown University",
 			"latitude": 41.8268,
 			"longitude": -71.4025,
-			"facts": [
-				"Founded in 1764 as the College in the English Colony of Rhode Island and Providence Plantations",
-				"One of the nine colonial colleges chartered before the American Revolution",
-				"Ivy League university located in Providence, Rhode Island",
-				"Known for its Open Curriculum, allowing students to design their own course of study"
-			]
+			"persona": "Progressive, intellectual, independent, pioneering, visionary.",
+			"script": "Welcome to Brown University, founded in 1764 as the seventh institution of higher learning in colonial America and the first to accept students regardless of religious affiliation. Here on College Hill, my Georgian and Richardsonian Romanesque buildings house one of the Ivy League's most intellectually daring communities, where the Open Curriculum—established in 1969—empowers students to chart their own scholarly paths without distribution requirements. I am a bastion of independent thought and academic freedom, where revolutionary ideas have flourished for over two and a half centuries, from the abolition movement to modern computational linguistics."
 		},
 		{
 			"id": "sciences_library",
 			"name": "Sciences Library (Brown University)",
 			"latitude": 41.8265,
 			"longitude": -71.4030,
-			"facts": [
-				"Part of Brown University's library system",
-				"Houses collections in biology, chemistry, physics, and environmental science",
-				"Opened in 1971 as the Sciences Library",
-				"Features modern study spaces and research facilities"
-			]
+			"persona": "Brutalist, analytical, precise, monolithic, stoic.",
+			"script": "You stand before the Science Library, a fourteen-story concrete monolith that has commanded the Providence skyline since 1971 as the singular, unyielding vessel for the University's empirical archives. Architect Warner Burns Toan Lunde's brutalist design utilizes rigid geometry and repetitive verticality to centralize scientific inquiry, eschewing aesthetic distraction for the absolute efficiency of the reinforced structural frame. Known simply as the SciLi, this building functions as a heavy, waffle-slabbed anchor for Thayer Street, imposing the weight of objective truth upon the surrounding landscape."
+		},
+		{
+			"id": "the_white_house",
+			"name": "The White House",
+			"latitude": 38.8977,
+			"longitude": -77.0365,
+			"persona": "Stately, Diplomatic, Resilient, Authoritative, Stoic.",
+			"script": "Welcome to 1600 Pennsylvania Avenue, the steadfast heart of American democracy and a resilient monument to the enduring spirit of a nation. Since James Hoban laid its cornerstone in 1792, these Neoclassical sandstone walls—reborn from the fires of 1814—have stood as the authoritative seat of global leadership and a silent witness to the weight of history. Within this hallowed residence, from the iconic West Wing to the graceful Truman Balcony, every stone embodies the quiet resolve of a republic that remains unshakable amidst the changing tides of time."
 		}
 	]
 }
