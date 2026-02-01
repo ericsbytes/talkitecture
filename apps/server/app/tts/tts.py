@@ -126,46 +126,63 @@ class TTSService:
 
     def create_custom_voice(self, name: str, description: str = "", prompt_adjectives: Optional[list] = None) -> Optional[Dict]:
         """
-        Create a custom voice on ElevenLabs using a prompt generated from adjectives.
-
-        Args:
-            name: Desired name for the custom voice
-            description: Optional description
-            prompt_adjectives: List of adjectives or short phrases describing the desired voice
-
-        Returns:
-            Response JSON from ElevenLabs if successful, otherwise None
+        Create a custom voice on ElevenLabs using voice design (text-to-voice).
+        This is a two-step process:
+        1. Generate voice previews from description
+        2. Create voice from selected preview
         """
-        # Build a voice prompt from adjectives + description
+        # Build voice description from adjectives + description
         prompt_parts = []
         if prompt_adjectives:
-            # ensure all adjectives are str
             prompt_parts.append(", ".join([str(a).strip() for a in prompt_adjectives if a]))
         if description:
             prompt_parts.append(description.strip())
 
-        voice_prompt = "; ".join(prompt_parts) if prompt_parts else ""
+        voice_description = "; ".join(prompt_parts) if prompt_parts else "A clear, natural voice"
 
-        payload = {
-            "name": name,
-            "description": description,
-            # use a field 'voice_prompt' to pass natural-language instructions
-            "voice_prompt": voice_prompt
+        # Step 1: Generate voice previews
+        design_payload = {
+            "text": "Hello, this is a preview of the generated voice.",  # Sample text for preview
+            "voice_description": voice_description,
+            "model_id": "eleven_multilingual_ttv_v2"  # Text-to-voice model
         }
 
         try:
+            # Generate previews
             response = requests.post(
-                f"{self.base_url}/voices",
+                f"{self.base_url}/text-to-voice/design",
                 headers={"Content-Type": "application/json", "xi-api-key": self.api_key},
-                json=payload,
+                json=design_payload,
                 timeout=30
             )
-
             response.raise_for_status()
-            return response.json()
+            previews = response.json()
+
+            if not previews.get("previews"):
+                logger.error("No voice previews generated")
+                return None
+
+            # Step 2: Create voice from first preview
+            generated_voice_id = previews["previews"][0]["generated_voice_id"]
+            
+            create_payload = {
+                "name": name,
+                "description": description,
+                "generated_voice_id": generated_voice_id
+            }
+
+            create_response = requests.post(
+                f"{self.base_url}/text-to-voice/create",
+                headers={"Content-Type": "application/json", "xi-api-key": self.api_key},
+                json=create_payload,
+                timeout=30
+            )
+            create_response.raise_for_status()
+            
+            return create_response.json()
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to create custom voice via prompt: {e}")
+            logger.error(f"Failed to create custom voice: {e}")
             return None
 
 
