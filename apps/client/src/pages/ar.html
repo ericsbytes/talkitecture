@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Mode - Talkitecture</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background: #000;
+            color: white;
+            overflow: hidden;
+        }
+
+        #camera {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: 1;
+        }
+
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        #landmarkInfo {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+            z-index: 3;
+        }
+
+        #landmarkName {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        #landmarkFacts {
+            font-size: 16px;
+            line-height: 1.4;
+        }
+
+        #landmarkFacts div {
+            margin-bottom: 5px;
+        }
+
+        .face-overlay {
+            position: absolute;
+            border: 3px solid #00ff00;
+            border-radius: 50%;
+            background: rgba(0, 255, 0, 0.2);
+        }
+
+        #controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 3;
+        }
+
+        #backButton {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        #backButton:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        #status {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 3;
+            font-size: 14px;
+        }
+
+        #sensorData {
+            position: fixed;
+            bottom: 80px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 3;
+            font-size: 12px;
+            font-family: monospace;
+        }
+
+        #sensorData div {
+            margin: 2px 0;
+        }
+    </style>
+</head>
+<body>
+    <video id="camera" autoplay playsinline></video>
+    <canvas id="overlay"></canvas>
+
+    <div id="landmarkInfo">
+        <div id="landmarkName">Detecting landmarks...</div>
+        <div id="landmarkFacts"></div>
+    </div>
+
+    <div id="controls">
+        <button id="backButton" onclick="window.location.href='../index.html'">← Back</button>
+    </div>
+
+    <div id="status">Initializing AR mode...</div>
+
+    <div id="sensorData">
+        <div>GPS: --</div>
+        <div>Orientation: --</div>
+        <div>Connection: --</div>
+    </div>
+
+    <script src="ar.js"></script>
+</body>
+</html>
