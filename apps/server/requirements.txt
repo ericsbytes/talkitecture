@@ -4,4 +4,6 @@ opencv-python
 numpy
 pillow
 requests
+elevenlabs
+pydantic
 python-multipart
