@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .landmarks import find_visible_landmarks
 
 import cv2
 import numpy as np
@@ -9,11 +10,11 @@ from typing import Optional, Tuple, List
 # pip install ultralytics
 from ultralytics import YOLO
 import time
-from face_source import get_next_face_frame_rgba
+from .face_source import get_next_face_frame_rgba
 import json
 from pathlib import Path
 import sounddevice as sd
-from face_source import init_audio, get_audio_for_playback
+from .face_source import init_audio, get_audio_for_playback
 
 BBox = Tuple[int, int, int, int]  # (x, y, w, h)
 
@@ -22,14 +23,14 @@ BBox = Tuple[int, int, int, int]  # (x, y, w, h)
 class Config:
     video_path: str = "app/data/ny.mov"     # .mov or .mp4
     model_path: str = "models/yolo11m.pt"       # your partner's trained model
-    target_label: str = "empire_state"          # MUST match your model's class name
+    # MUST match your model's class name
+    target_label: str = "empire_state"
     conf_thresh: float = 0.35
     iou_thresh: float = 0.45
     reference_json: str = "app/data/reference_points.json"
     orb_nfeatures: int = 1500
     orb_ratio_test: float = 0.75
     orb_min_matches: int = 20
-
 
     # Tracker settings (bbox tracker still available as fallback)
     tracker_type: str = "CSRT"
@@ -46,7 +47,8 @@ class Config:
     # 4-point planar tracking
     lk_win_size: Tuple[int, int] = (21, 21)
     lk_max_level: int = 3
-    lk_criteria: Tuple[int, int, float] = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01)
+    lk_criteria: Tuple[int, int, float] = (
+        cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01)
 
     # Pose from homography (approx intrinsics)
     use_pose_decomposition: bool = True  # set False if you only want quad tracking
@@ -81,7 +83,8 @@ def create_tracker(tracker_type: str):
         raise ValueError("tracker_type must be CSRT, KCF, or MOSSE")
 
     if t is None:
-        raise RuntimeError("Could not create tracker. Try: pip install opencv-contrib-python")
+        raise RuntimeError(
+            "Could not create tracker. Try: pip install opencv-contrib-python")
     return t
 
 
@@ -225,8 +228,10 @@ def collect_4_points(frame: np.ndarray, window: str = "Init Quad (4 clicks)") ->
 
     while True:
         view = clone.copy()
-        msg = instructions[len(pts)] if len(pts) < 4 else "Done! Press ENTER to confirm, or 'c' to clear"
-        cv2.putText(view, msg, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (50, 255, 255), 2, cv2.LINE_AA)
+        msg = instructions[len(pts)] if len(
+            pts) < 4 else "Done! Press ENTER to confirm, or 'c' to clear"
+        cv2.putText(view, msg, (20, 40), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.8, (50, 255, 255), 2, cv2.LINE_AA)
         cv2.imshow(window, view)
 
         key = cv2.waitKey(20) & 0xFF
@@ -237,12 +242,12 @@ def collect_4_points(frame: np.ndarray, window: str = "Init Quad (4 clicks)") ->
             clone = frame.copy()
         if key in (27, ord("q")):  # cancel
             break
-        
 
     cv2.destroyWindow(window)
 
     if len(pts) != 4:
-        raise RuntimeError("Point collection cancelled or incomplete (need 4 points).")
+        raise RuntimeError(
+            "Point collection cancelled or incomplete (need 4 points).")
 
     return np.array(pts, dtype=np.float32)
 
@@ -281,7 +286,9 @@ def draw_quad(frame: np.ndarray, pts4: np.ndarray, color=(0, 255, 0), thickness:
         cv2.line(frame, a, b, color, thickness)
     for i, (x, y) in enumerate(pts, start=1):
         cv2.circle(frame, (int(x), int(y)), 4, (0, 255, 255), -1)
-        cv2.putText(frame, str(i), (int(x) + 6, int(y) - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+        cv2.putText(frame, str(i), (int(x) + 6, int(y) - 6),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+
 
 def order_quad_tl_tr_br_bl(quad: np.ndarray) -> np.ndarray:
     """
@@ -403,6 +410,7 @@ def smooth_points(prev: np.ndarray, new: np.ndarray, alpha: float = 0.75) -> np.
     """
     return (alpha * prev + (1 - alpha) * new).astype(np.float32)
 
+
 def warp_face_to_quad(face_rgba: np.ndarray, quad_pts: np.ndarray, out_w: int, out_h: int) -> np.ndarray:
     """
     Warp an RGBA face image (fh, fw, 4) into the video frame using the destination quad points.
@@ -410,7 +418,8 @@ def warp_face_to_quad(face_rgba: np.ndarray, quad_pts: np.ndarray, out_w: int, o
     Returns an RGBA image (out_h, out_w, 4) aligned to the building.
     """
     fh, fw = face_rgba.shape[:2]
-    src = np.array([[0, 0], [fw - 1, 0], [fw - 1, fh - 1], [0, fh - 1]], dtype=np.float32)
+    src = np.array([[0, 0], [fw - 1, 0], [fw - 1, fh - 1],
+                   [0, fh - 1]], dtype=np.float32)
     dst = quad_pts.astype(np.float32)
 
     M = cv2.getPerspectiveTransform(src, dst)
@@ -436,9 +445,11 @@ def alpha_blend_rgba_onto_bgr(frame_bgr: np.ndarray, overlay_rgba: np.ndarray) -
     out = out * (1.0 - alpha) + overlay[:, :, :3] * alpha
     return out.astype(np.uint8)
 
+
 def shrink_quad(quad: np.ndarray, scale: float = 0.75) -> np.ndarray:
     c = quad.mean(axis=0, keepdims=True)
     return (c + scale * (quad - c)).astype(np.float32)
+
 
 def pose_from_homography(K: np.ndarray, H: np.ndarray) -> Optional[Tuple[float, float, float]]:
     """
@@ -469,9 +480,11 @@ def pose_from_homography(K: np.ndarray, H: np.ndarray) -> Optional[Tuple[float, 
     R = Rs[best_idx]
     # yaw/pitch/roll from rotation matrix (one convention)
     yaw = np.degrees(np.arctan2(R[1, 0], R[0, 0]))
-    pitch = np.degrees(np.arctan2(-R[2, 0], np.sqrt(R[2, 1] ** 2 + R[2, 2] ** 2)))
+    pitch = np.degrees(
+        np.arctan2(-R[2, 0], np.sqrt(R[2, 1] ** 2 + R[2, 2] ** 2)))
     roll = np.degrees(np.arctan2(R[2, 1], R[2, 2]))
     return float(yaw), float(pitch), float(roll)
+
 
 def load_reference_json(json_path: str) -> tuple[str, np.ndarray]:
     """
@@ -523,7 +536,8 @@ def estimate_homography_orb(
     if len(good) < min_matches:
         return None
 
-    src_pts = np.float32([ref_kps[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
+    src_pts = np.float32(
+        [ref_kps[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
     dst_pts = np.float32([kps2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
 
     H, inliers = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
@@ -554,11 +568,12 @@ def main(cfg: Config):
 
     ref_bgr = cv2.imread(ref_img_path)
     if ref_bgr is None:
-        raise FileNotFoundError(f"Could not read reference image: {ref_img_path}")
+        raise FileNotFoundError(
+            f"Could not read reference image: {ref_img_path}")
 
     ref_gray = cv2.cvtColor(ref_bgr, cv2.COLOR_BGR2GRAY)
-    ref_kps, ref_des = orb_detect_and_compute(ref_gray, nfeatures=cfg.orb_nfeatures)
-
+    ref_kps, ref_des = orb_detect_and_compute(
+        ref_gray, nfeatures=cfg.orb_nfeatures)
 
     # --- bbox tracking state (your old mode) ---
     tracker = None
@@ -573,11 +588,13 @@ def main(cfg: Config):
     quad_ref: Optional[np.ndarray] = None      # (4,2) initial quad
     quad_curr: Optional[np.ndarray] = None     # (4,2) current quad
 
-    pts_ref: Optional[np.ndarray] = None       # (N,2) points in reference frame
-    pts_curr: Optional[np.ndarray] = None      # (N,2) points tracked to current frame
+    # (N,2) points in reference frame
+    pts_ref: Optional[np.ndarray] = None
+    # (N,2) points tracked to current frame
+    pts_curr: Optional[np.ndarray] = None
 
     quad_lost = 0
-    frame_idx = 0 
+    frame_idx = 0
 
     print("Controls:")
     print("  q or ESC: quit")
@@ -618,7 +635,6 @@ def main(cfg: Config):
             pts_curr = None
             quad_lost = 0
 
-
         # Init quad planar tracking on current frame
         if key == ord("p"):
             try:
@@ -628,7 +644,8 @@ def main(cfg: Config):
                 gray0 = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 pts0 = init_points_in_quad(gray0, q, max_pts=300)
                 if pts0 is None:
-                    raise RuntimeError("Not enough corners inside quad. Try clicking a more textured facade area.")
+                    raise RuntimeError(
+                        "Not enough corners inside quad. Try clicking a more textured facade area.")
 
                 mode = "quad"
                 prev_gray = gray0
@@ -646,10 +663,10 @@ def main(cfg: Config):
             except RuntimeError:
                 pass
 
-
         # BBox tracker manual init
         if key == ord("m"):
-            bbox = cv2.selectROI("Select Building ROI", frame, fromCenter=False, showCrosshair=True)
+            bbox = cv2.selectROI("Select Building ROI",
+                                 frame, fromCenter=False, showCrosshair=True)
             cv2.destroyWindow("Select Building ROI")
             bbox = tuple(map(int, bbox))
             if bbox[2] > 0 and bbox[3] > 0:
@@ -716,7 +733,8 @@ def main(cfg: Config):
                 )
             else:
                 # Map the reference quad into current frame
-                q = cv2.perspectiveTransform(ref_quad.reshape(-1, 1, 2), Href).reshape(-1, 2)
+                q = cv2.perspectiveTransform(
+                    ref_quad.reshape(-1, 1, 2), Href).reshape(-1, 2)
                 q = order_quad_tl_tr_br_bl(q)
 
                 # Seed KLT points inside that quad
@@ -757,7 +775,6 @@ def main(cfg: Config):
             audio_playing = False
             audio_start_time = None
 
-
         # -----------------------------
         # MODE 1: Planar quad tracking
         # -----------------------------
@@ -777,7 +794,8 @@ def main(cfg: Config):
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
                 # Track many points forward
-                next_pts, status = track_points_klt(prev_gray, gray, pts_curr, cfg)
+                next_pts, status = track_points_klt(
+                    prev_gray, gray, pts_curr, cfg)
                 good = status.reshape(-1) == 1
 
                 pts_ref_g = pts_ref[good]
@@ -798,7 +816,8 @@ def main(cfg: Config):
 
                     # Auto-repair: try reseeding points inside current quad
                     if quad_lost >= 5:
-                        pts_new = init_points_in_quad(gray, quad_curr, max_pts=300)
+                        pts_new = init_points_in_quad(
+                            gray, quad_curr, max_pts=300)
                         if pts_new is not None:
                             # Reset reference to current so homography continues smoothly
                             prev_gray = gray
@@ -831,17 +850,20 @@ def main(cfg: Config):
                     else:
                         # Update quad from homography
                         new_quad = update_quad_via_homography(quad_ref, Hmat)
-                        quad_curr = smooth_points(quad_curr, new_quad, alpha=0.80)
+                        quad_curr = smooth_points(
+                            quad_curr, new_quad, alpha=0.80)
 
                         # Draw quad (debug)
                         if cfg.show_debug_overlays:
-                            draw_quad(frame, quad_curr, color=(0, 255, 0), thickness=2)
+                            draw_quad(frame, quad_curr, color=(
+                                0, 255, 0), thickness=2)
 
                         # Project your animated face into quad_curr
                         t_anim = time.time() - audio_start_time if audio_start_time is not None else 0.0
                         face_rgba = get_next_face_frame_rgba(t_anim)
                         quad_face = shrink_quad(quad_curr, scale=0.75)
-                        warped_face = warp_face_to_quad(face_rgba, quad_face, Ww, Hh)
+                        warped_face = warp_face_to_quad(
+                            face_rgba, quad_face, Ww, Hh)
                         frame = alpha_blend_rgba_onto_bgr(frame, warped_face)
 
                         # Optional: show inlier count for debugging
@@ -865,7 +887,6 @@ def main(cfg: Config):
                             for (x, y) in pts_curr.astype(int):
                                 cv2.circle(frame, (x, y), 1, (255, 0, 0), -1)
 
-
                 prev_gray = gray
 
             cv2.putText(
@@ -878,7 +899,6 @@ def main(cfg: Config):
                 2,
                 cv2.LINE_AA,
             )
-
 
         # -----------------------------
         # MODE 2: YOLO + bbox tracking
@@ -915,7 +935,8 @@ def main(cfg: Config):
                     lost_count = 0
 
                     if cfg.draw_label:
-                        draw_bbox(frame, bbox, f"DETECTED {cfg.target_label} ({conf:.2f})")
+                        draw_bbox(
+                            frame, bbox, f"DETECTED {cfg.target_label} ({conf:.2f})")
                 else:
                     if not tracking:
                         cv2.putText(
@@ -985,8 +1006,6 @@ if __name__ == "__main__":
         target_label="empire_state",
     )
     main(cfg)
-
-from .landmarks import find_visible_landmarks
 
 
 def analyze_video(video_path):

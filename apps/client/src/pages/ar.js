@@ -24,8 +24,10 @@ let sendIntervalId = null;
 let useApi = false; // API integration toggle - start disabled for testing local landmarks
 const FRAME_RATE_LIMIT = 3000 / 10; // 30 FPS
 let currentLandmarkName = null;
+let currentLandmarkData = null; // Store full landmark data for audio_url
 let audioElement = null;
 let isPlayingAudio = false;
+let currentAudioBlobUrl = null; // Store blob URL to prevent garbage collection
 
 function logDebug(message) {
     if (!debugLogDiv) return;
@@ -40,55 +42,105 @@ async function playLandmarkNarration(landmarkName) {
     
     try {
         playButton.disabled = true;
-        audioStatus.textContent = 'Fetching audio...';
-        logDebug(`Fetching narration for ${landmarkName}`);
+        audioStatus.textContent = 'Loading audio...';
 
-        // Get server URL
-        let serverUrl = window.SERVER_URL || window.location.hostname;
-        if (serverUrl === '127.0.0.1' || serverUrl === '') {
-            serverUrl = 'localhost';
+        // Stop any existing playback first
+        if (audioElement && !audioElement.paused) {
+            audioElement.pause();
+            audioElement.currentTime = 0;
         }
 
-        const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-        const url = `${protocol}//${serverUrl}:8000/landmark/voice?landmark_name=${encodeURIComponent(landmarkName)}`;
+        let audioUrl = null;
+        
+        // Check if landmark data has audio_url
+        if (currentLandmarkData && currentLandmarkData.audio_url) {
+            // Extract filename from audio_url (e.g., "/audio/sciences_library.mp3" -> "sciences_library.mp3")
+            const filename = currentLandmarkData.audio_url.split('/').pop();
+            
+            // Use local audio file served from same origin (client directory)
+            audioUrl = `/audio/${filename}`;
+        } else {
+            // Fallback to generating audio from TTS
+            let serverUrl = window.SERVER_URL || window.location.hostname;
+            if (serverUrl === '127.0.0.1' || serverUrl === '') {
+                serverUrl = 'localhost';
+            }
 
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch audio: ${response.status}`);
+            const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+            const ttsUrl = `${protocol}//${serverUrl}:8000/landmark/voice?landmark_name=${encodeURIComponent(landmarkName)}`;
+
+            try {
+                const response = await fetch(ttsUrl);
+                if (!response.ok) {
+                    throw new Error(`TTS failed: ${response.status}`);
+                }
+                const audioBlob = await response.blob();
+                audioUrl = URL.createObjectURL(audioBlob);
+            } catch (ttsError) {
+                throw ttsError;
+            }
         }
-
-        const audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
 
         // Create or reuse audio element
         if (!audioElement) {
             audioElement = new Audio();
+            audioElement.preload = 'auto';
+            
             audioElement.addEventListener('ended', () => {
                 isPlayingAudio = false;
                 playButton.disabled = false;
                 audioStatus.textContent = 'Finished';
                 playButton.textContent = '🔊 Play Narration';
             });
+            
             audioElement.addEventListener('error', (e) => {
-                console.error('Audio playback error:', e);
+                const errorCode = e.target.error ? e.target.error.code : 'unknown';
+                const errorMsg = e.target.error ? e.target.error.message : 'unknown error';
+                console.error('Audio playback error:', e, e.target.error);
                 isPlayingAudio = false;
                 playButton.disabled = false;
-                audioStatus.textContent = 'Error playing audio';
-                logDebug('Audio playback error');
+                audioStatus.textContent = `Error: ${errorMsg}`;
             });
         }
 
         audioElement.src = audioUrl;
-        audioElement.play();
+        audioElement.volume = 1.0;
+        audioElement.load(); // Explicitly start loading
+        
         isPlayingAudio = true;
-        audioStatus.textContent = 'Now playing...';
-        playButton.textContent = '⏸ Stop';
-        logDebug('Narration playing...');
+        audioStatus.textContent = 'Loading...';
+        playButton.textContent = '⏸ Pause';
+        
+        // Wait for enough data before playing
+        await new Promise((resolve, reject) => {
+            const canplayHandler = () => {
+                audioElement.removeEventListener('canplaythrough', canplayHandler);
+                audioElement.removeEventListener('error', errorHandler);
+                resolve();
+            };
+            
+            const errorHandler = (e) => {
+                audioElement.removeEventListener('canplaythrough', canplayHandler);
+                audioElement.removeEventListener('error', errorHandler);
+                reject(new Error('Failed to load audio'));
+            };
+            
+            audioElement.addEventListener('canplaythrough', canplayHandler, { once: true });
+            audioElement.addEventListener('error', errorHandler, { once: true });
+        });
+        
+        audioStatus.textContent = 'Playing...';
+        
+        try {
+            await audioElement.play();
+        } catch (playError) {
+            throw playError;
+        }
     } catch (error) {
         console.error('Error playing narration:', error);
-        audioStatus.textContent = 'Error loading audio';
+        isPlayingAudio = false;
         playButton.disabled = false;
-        logDebug(`Error: ${error.message}`);
+        audioStatus.textContent = 'Error playing audio';
     }
 }
 
@@ -98,13 +150,37 @@ function toggleAudioPlayback() {
         return;
     }
 
-    if (isPlayingAudio && audioElement) {
+    if (isPlayingAudio && audioElement && !audioElement.paused) {
+        // Pause the audio
         audioElement.pause();
         isPlayingAudio = false;
-        playButton.textContent = '🔊 Play Narration';
+        playButton.textContent = '▶️ Resume';
         audioStatus.textContent = 'Paused';
+        playButton.disabled = false;
+    } else if (audioElement && audioElement.paused && audioElement.currentTime > 0 && audioElement.currentTime < audioElement.duration) {
+        // Resume paused audio
+        isPlayingAudio = true;
+        audioElement.play().then(() => {
+            playButton.textContent = '⏸ Pause';
+            audioStatus.textContent = 'Playing...';
+        }).catch(err => {
+            isPlayingAudio = false;
+            playButton.disabled = false;
+        });
     } else {
+        // Start playing from beginning
         playLandmarkNarration(currentLandmarkName);
+    }
+}
+
+function stopAudio() {
+    if (audioElement) {
+        audioElement.pause();
+        audioElement.currentTime = 0;
+        isPlayingAudio = false;
+        playButton.textContent = '🔊 Play Narration';
+        audioStatus.textContent = 'Stopped';
+        playButton.disabled = false;
     }
 }
 
@@ -118,10 +194,11 @@ function sendSensorData() {
         alpha: deviceOrientation.alpha,
         beta: deviceOrientation.beta,
         gamma: deviceOrientation.gamma,
-        use_api: useApi
+        use_api: useApi,
+        screen_width: overlay.width || window.innerWidth,
+        screen_height: overlay.height || window.innerHeight
     };
 
-    logDebug(`Sending sensor data via WebSocket: lat=${frameData.latitude.toFixed(4)}, lon=${frameData.longitude.toFixed(4)}, alpha=${frameData.alpha.toFixed(0)}`);
     try {
         websocket.send(JSON.stringify(frameData));
     } catch (error) {
@@ -188,8 +265,26 @@ async function initAR() {
         camera.srcObject = stream;
         await camera.play();
 
-        overlay.width = camera.videoWidth;
-        overlay.height = camera.videoHeight;
+        // Wait a moment for video dimensions to be available
+        await new Promise(resolve => {
+            const checkDimensions = () => {
+                if (camera.videoWidth > 0 && camera.videoHeight > 0) {
+                    console.log(`Camera dimensions: ${camera.videoWidth}x${camera.videoHeight}`);
+                    overlay.width = camera.videoWidth;
+                    overlay.height = camera.videoHeight;
+                    console.log(`Overlay canvas dimensions: ${overlay.width}x${overlay.height}`);
+                    
+                    // Initialize 2D context immediately to reserve it
+                    const ctx = overlay.getContext('2d');
+                    console.log('Overlay 2D context initialized:', !!ctx);
+                    
+                    resolve();
+                } else {
+                    setTimeout(checkDimensions, 100);
+                }
+            };
+            checkDimensions();
+        });
 
         statusDiv.textContent = 'Initializing GPS...';
 
@@ -447,6 +542,71 @@ async function processARFrame() {
     requestAnimationFrame(processARFrame);
 }
 
+let glRenderer = null;
+let faceCanvas = null;
+let faceCtx = null;
+
+function initFaceCanvas() {
+    if (!faceCanvas) {
+        console.log('Creating face canvas...');
+        faceCanvas = document.createElement('canvas');
+        faceCanvas.width = 200;
+        faceCanvas.height = 200;
+        faceCtx = faceCanvas.getContext('2d');
+        console.log('Face canvas created:', faceCanvas.width, 'x', faceCanvas.height);
+        
+        // Draw face immediately
+        drawFace(faceCanvas, faceCtx);
+        console.log('Face drawn on canvas');
+    } else {
+        console.log('Face canvas already initialized');
+    }
+}
+
+function initWebGL() {
+    try {
+        const gl = overlay.getContext('webgl2') || overlay.getContext('webgl');
+        if (!gl) throw new Error('WebGL not supported');
+        
+        glRenderer = { gl };
+        return glRenderer;
+    } catch (error) {
+        console.error('WebGL initialization failed:', error);
+        return null;
+    }
+}
+
+function drawFace(canvas, ctx) {
+    // Clear
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(255, 200, 100, 0.8)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw face outline
+    ctx.strokeStyle = '#8B6F47';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(canvas.width/2, canvas.height/2, canvas.width/2 - 5, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Draw eyes
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(canvas.width/3, canvas.height/3, 15, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.beginPath();
+    ctx.arc(canvas.width * 2/3, canvas.height/3, 15, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw mouth
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(canvas.width/2, canvas.height * 2/3, 40, 0, Math.PI);
+    ctx.stroke();
+}
+
 function updateAROverlay(result) {
     if (result.error) {
         landmarkInfo.style.display = 'none';
@@ -456,54 +616,223 @@ function updateAROverlay(result) {
     // Update landmark info
     const landmarkNameText = result.landmark.name;
     landmarkName.textContent = landmarkNameText;
+    // Check if landmark changed
+    const landmarkChanged = currentLandmarkName !== landmarkNameText;
+    
     currentLandmarkName = landmarkNameText;
+    currentLandmarkData = result.landmark; // Store full landmark data
     
-    // Display script/narration as caption
-    landmarkScript.textContent = result.landmark.script || '';
+    console.log('updateAROverlay - landmark:', landmarkNameText, 'face_region:', result.face_region);
     
-    // Reset audio status when landmark changes
-    if (audioElement) {
-        audioElement.pause();
+    // Reset audio status ONLY when landmark changes
+    if (landmarkChanged) {
+        if (audioElement && !audioElement.paused) {
+            logDebug(`Landmark changed - stopping audio`);
+            audioElement.pause();
+        }
+        isPlayingAudio = false;
+        playButton.disabled = false;
+        playButton.textContent = '🔊 Play Narration';
+        audioStatus.textContent = '';
     }
-    isPlayingAudio = false;
-    playButton.disabled = false;
-    playButton.textContent = '🔊 Play Narration';
-    audioStatus.textContent = '';
 
     // Show landmark info
     landmarkInfo.style.display = 'block';
 
-    // Clear previous overlays
-    overlay.innerHTML = '';
+    // Initialize face canvas immediately
+    initFaceCanvas();
+    
+    // Ensure canvas has proper dimensions FIRST
+    if (!overlay.width || !overlay.height) {
+        if (camera && camera.videoWidth > 0 && camera.videoHeight > 0) {
+            overlay.width = camera.videoWidth;
+            overlay.height = camera.videoHeight;
+            console.log('Set overlay dimensions:', overlay.width, 'x', overlay.height);
+        } else {
+            // Fallback to window dimensions
+            overlay.width = window.innerWidth;
+            overlay.height = window.innerHeight;
+            console.log('Set overlay to window dimensions:', overlay.width, 'x', overlay.height);
+        }
+    }
+    
+    // Get 2D context for drawing
+    const ctx = overlay.getContext('2d');
+    console.log('Overlay canvas:', overlay.width, 'x', overlay.height);
+    console.log('Context obtained:', !!ctx);
+    console.log('FaceCanvas status:', faceCanvas ? `${faceCanvas.width}x${faceCanvas.height}` : 'null');
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
 
-    // Add face overlay if face detected
+    // Draw debug indicator to verify canvas works
+    ctx.fillStyle = '#FF0000';
+    ctx.fillRect(10, 10, 20, 20);
+
+    // Render face with perspective transform
     if (result.face_region) {
-        const [x, y, w, h] = [
-            result.face_region.x,
-            result.face_region.y,
-            result.face_region.width,
-            result.face_region.height
-        ];
-
-        // Scale coordinates to screen size
-        const scaleX = overlay.width / camera.videoWidth;
-        const scaleY = overlay.height / camera.videoHeight;
-
-        const scaledX = x * scaleX;
-        const scaledY = y * scaleY;
-        const scaledW = w * scaleX;
-        const scaledH = h * scaleY;
-
-        // Create face bounding box
-        const faceDiv = document.createElement('div');
-        faceDiv.className = 'face-overlay';
-        faceDiv.style.left = `${scaledX}px`;
-        faceDiv.style.top = `${scaledY}px`;
-        faceDiv.style.width = `${scaledW}px`;
-        faceDiv.style.height = `${scaledH}px`;
-        overlay.appendChild(faceDiv);
+        const face = result.face_region;
+        console.log('Drawing face with region:', JSON.stringify(face));
+        
+        try {
+            // Handle both array format (quad points) and object format (bounding box)
+            if (Array.isArray(face) && face.length >= 4) {
+                console.log('Applying quad perspective transform');
+                console.log('Face region as quad:', face);
+                drawFaceWithPerspective(faceCanvas, face, ctx);
+            } else if (face.x !== undefined) {
+                console.log('Drawing face at bounding box position with wall projection:', face);
+                if (!faceCanvas) {
+                    console.error('faceCanvas is null!');
+                    return;
+                }
+                
+                // Create 3D wall projection with perspective
+                const x = face.x;
+                const y = face.y;
+                const w = face.width;
+                const h = face.height;
+                
+                // Simulate a vertical wall with 3D perspective
+                // Narrower at top AND sides (creates depth illusion)
+                const perspectiveX = w * 0.12;  // Side perspective (12%)
+                const perspectiveY = h * 0.08;  // Top perspective (8%)
+                
+                // Create quad that simulates a wall viewed from angle
+                const quad = [
+                    [x + perspectiveX, y + perspectiveY],              // top-left (inset both ways)
+                    [x + w - perspectiveX, y + perspectiveY],          // top-right (inset both ways)
+                    [x + w, y + h],                                    // bottom-right (full width at bottom)
+                    [x, y + h]                                         // bottom-left (full width at bottom)
+                ];
+                
+                console.log('Wall projection quad:', quad);
+                drawFaceWithPerspective(faceCanvas, quad, ctx);
+                console.log('Face projected onto wall surface');
+            } else {
+                console.log('Face region format not recognized, raw data:', face);
+                // Fallback: draw at center of screen
+                const centerX = overlay.width / 2 - 100;
+                const centerY = overlay.height / 2 - 100;
+                ctx.globalAlpha = 0.8;
+                ctx.drawImage(faceCanvas, centerX, centerY, 200, 200);
+                ctx.globalAlpha = 1.0;
+                console.log('Face drawn at center (fallback)');
+            }
+        } catch (error) {
+            console.error('Error drawing face:', error);
+        }
+    } else {
+        console.log('No face_region in result');
+        // Draw at center as fallback
+        try {
+            const centerX = overlay.width / 2 - 100;
+            const centerY = overlay.height / 2 - 100;
+            ctx.globalAlpha = 0.6;
+            ctx.drawImage(faceCanvas, centerX, centerY, 200, 200);
+            ctx.globalAlpha = 1.0;
+            console.log('Face drawn at center (no region)');
+        } catch (error) {
+            console.error('Error drawing face fallback:', error);
+        }
     }
 }
+
+function drawFaceWithPerspective(srcCanvas, quad, destCanvas) {
+    /**
+     * Draw source face canvas onto destination canvas with perspective
+     * quad format: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]] (TL, TR, BR, BL)
+     */
+    const ctx = destCanvas.getContext('2d');
+    const w = srcCanvas.width;
+    const h = srcCanvas.height;
+    
+    // Source corners in original face
+    const srcCorners = [[0, 0], [w, 0], [w, h], [0, h]];
+    
+    // Use canvas 2D transform with quadrilateral mapping
+    // We'll use simple triangulation - split quad into 2 triangles
+    
+    ctx.globalAlpha = 0.7;
+    
+    // Draw first triangle (TL, TR, BR)
+    drawTriangle(ctx, srcCanvas,
+        srcCorners[0], srcCorners[1], srcCorners[2],
+        quad[0], quad[1], quad[2]
+    );
+    
+    // Draw second triangle (TL, BR, BL)
+    drawTriangle(ctx, srcCanvas,
+        srcCorners[0], srcCorners[2], srcCorners[3],
+        quad[0], quad[2], quad[3]
+    );
+    
+    ctx.globalAlpha = 1.0;
+}
+
+function drawTriangle(ctx, srcCanvas, srcP1, srcP2, srcP3, dstP1, dstP2, dstP3) {
+    /**
+     * Draw a triangle from source canvas to destination with perspective transform
+     */
+    try {
+        ctx.save();
+        
+        // Create clipping region for destination triangle
+        ctx.beginPath();
+        ctx.moveTo(dstP1[0], dstP1[1]);
+        ctx.lineTo(dstP2[0], dstP2[1]);
+        ctx.lineTo(dstP3[0], dstP3[1]);
+        ctx.closePath();
+        ctx.clip();
+        
+        // Compute affine transformation from source to destination
+        const mat = getAffineTransform(srcP1, srcP2, srcP3, dstP1, dstP2, dstP3);
+        console.log('Affine matrix:', mat);
+        
+        if (!mat || (mat.a === 1 && mat.b === 0 && mat.c === 0 && mat.d === 1 && mat.e === 0 && mat.f === 0)) {
+            console.warn('Affine matrix is identity, might indicate collinear points');
+        }
+        
+        // Apply transformation
+        ctx.transform(mat.a, mat.b, mat.c, mat.d, mat.e, mat.f);
+        
+        // Draw the source canvas
+        ctx.drawImage(srcCanvas, 0, 0);
+        console.log('Triangle drawn successfully');
+        
+        ctx.restore();
+    } catch (error) {
+        console.error('Error in drawTriangle:', error);
+        ctx.restore();
+    }
+}
+
+function getAffineTransform(src1, src2, src3, dst1, dst2, dst3) {
+    /**
+     * Calculate affine transformation matrix that maps src points to dst points
+     */
+    const x1 = src1[0], y1 = src1[1];
+    const x2 = src2[0], y2 = src2[1];
+    const x3 = src3[0], y3 = src3[1];
+    
+    const u1 = dst1[0], v1 = dst1[1];
+    const u2 = dst2[0], v2 = dst2[1];
+    const u3 = dst3[0], v3 = dst3[1];
+    
+    const denom = x1 * (y2 - y3) - x2 * (y1 - y3) + x3 * (y1 - y2);
+    
+    if (Math.abs(denom) < 0.0001) return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
+    
+    const a = ((u1 * (y2 - y3) - u2 * (y1 - y3) + u3 * (y1 - y2)) / denom);
+    const b = ((v1 * (y2 - y3) - v2 * (y1 - y3) + v3 * (y1 - y2)) / denom);
+    const c = ((u1 * (x3 - x2) - u2 * (x3 - x1) + u3 * (x2 - x1)) / denom);
+    const d = ((v1 * (x3 - x2) - v2 * (x3 - x1) + v3 * (x2 - x1)) / denom);
+    const e = (u1 * (x2 * y3 - x3 * y2) - u2 * (x1 * y3 - x3 * y1) + u3 * (x1 * y2 - x2 * y1)) / denom;
+    const f = (v1 * (x2 * y3 - x3 * y2) - v2 * (x1 * y3 - x3 * y1) + v3 * (x1 * y2 - x2 * y1)) / denom;
+    
+    return { a, b, c, d, e, f };
+}
+
 
 // Initialize AR when page loads
 window.addEventListener('load', () => {
@@ -513,8 +842,9 @@ window.addEventListener('load', () => {
     // Add API toggle event listener
     document.getElementById('apiToggle').addEventListener('click', toggleApi);
     
-    // Add audio play button listener
+    // Add audio control button listeners
     playButton.addEventListener('click', toggleAudioPlayback);
+    document.getElementById('stopButton').addEventListener('click', stopAudio);
 });
 
 // Cleanup when leaving page

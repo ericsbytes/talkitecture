@@ -85,6 +85,26 @@
             cursor: not-allowed;
         }
 
+        #stopButton {
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 5px;
+        }
+
+        #stopButton:hover {
+            background: #da190b;
+        }
+
+        #stopButton:disabled {
+            background: #999;
+            cursor: not-allowed;
+        }
+
         #audioStatus {
             font-size: 12px;
             color: #aaa;
@@ -175,9 +195,9 @@
 
     <div id="landmarkInfo">
         <div id="landmarkName">Detecting landmarks...</div>
-        <div id="landmarkScript"></div>
         <div id="audioControls">
             <button id="playButton">🔊 Play Narration</button>
+            <button id="stopButton">⏹ Stop</button>
             <div id="audioStatus"></div>
         </div>
     </div>

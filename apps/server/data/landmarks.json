@@ -12,7 +12,8 @@
 			"latitude": 40.7484,
 			"longitude": -73.9857,
 			"persona": "Majestic, resilient, sophisticated, authoritative, and eloquent.",
-			"script": "Welcome to the beating heart of Manhattan, where I stand as a sovereign sentinel of the skyline, forged from the indomitable spirit of an era that dared to touch the heavens. Completed in a breathtaking thirteen months, my Art Deco silhouette and limestone grandeur remain an eternal testament to human ambition, famously crowned by a spire once envisioned as a docking port for transatlantic airships. I am more than a monument of steel; I am the very pulse of New York City, an unshakeable icon of elegance that has presided over this metropolis with majestic grace for generations."
+			"script": "Welcome to the beating heart of Manhattan, where I stand as a sovereign sentinel of the skyline, forged from the indomitable spirit of an era that dared to touch the heavens. Completed in a breathtaking thirteen months, my Art Deco silhouette and limestone grandeur remain an eternal testament to human ambition, famously crowned by a spire once envisioned as a docking port for transatlantic airships. I am more than a monument of steel; I am the very pulse of New York City, an unshakeable icon of elegance that has presided over this metropolis with majestic grace for generations.",
+			"audio_url": "/audio/empire_state_building.mp3"
 		},
 		{
 			"id": "central_park",
@@ -33,20 +34,13 @@
 			"longitude": -73.9969
 		},
 		{
-			"id": "brown_university",
-			"name": "Brown University",
-			"latitude": 41.8268,
-			"longitude": -71.4025,
-			"persona": "Progressive, intellectual, independent, pioneering, visionary.",
-			"script": "Welcome to Brown University, founded in 1764 as the seventh institution of higher learning in colonial America and the first to accept students regardless of religious affiliation. Here on College Hill, my Georgian and Richardsonian Romanesque buildings house one of the Ivy League's most intellectually daring communities, where the Open Curriculum—established in 1969—empowers students to chart their own scholarly paths without distribution requirements. I am a bastion of independent thought and academic freedom, where revolutionary ideas have flourished for over two and a half centuries, from the abolition movement to modern computational linguistics."
-		},
-		{
 			"id": "sciences_library",
 			"name": "Sciences Library (Brown University)",
 			"latitude": 41.8265,
 			"longitude": -71.4030,
 			"persona": "Brutalist, analytical, precise, monolithic, stoic.",
-			"script": "You stand before the Science Library, a fourteen-story concrete monolith that has commanded the Providence skyline since 1971 as the singular, unyielding vessel for the University's empirical archives. Architect Warner Burns Toan Lunde's brutalist design utilizes rigid geometry and repetitive verticality to centralize scientific inquiry, eschewing aesthetic distraction for the absolute efficiency of the reinforced structural frame. Known simply as the SciLi, this building functions as a heavy, waffle-slabbed anchor for Thayer Street, imposing the weight of objective truth upon the surrounding landscape."
+			"script": "You stand before the Science Library, a fourteen-story concrete monolith that has commanded the Providence skyline since 1971 as the singular, unyielding vessel for the University's empirical archives. Architect Warner Burns Toan Lunde's brutalist design utilizes rigid geometry and repetitive verticality to centralize scientific inquiry, eschewing aesthetic distraction for the absolute efficiency of the reinforced structural frame. Known simply as the SciLi, this building functions as a heavy, waffle-slabbed anchor for Thayer Street, imposing the weight of objective truth upon the surrounding landscape.",
+			"audio_url": "/audio/sciences_library.mp3"
 		},
 		{
 			"id": "the_white_house",
